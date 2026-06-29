@@ -1,6 +1,6 @@
 # Image Asset Index
 
-These images are stored locally under `assets/`.
+Pics live under `assets/`. GitHub should render most of these directly in the notes.
 
 ## Main Extracted Images
 
@@ -52,4 +52,4 @@ Example:
 ![DRV8320H block diagram](../assets/drv8320_page23-23.png)
 ```
 
-If you paste the Markdown into Google Docs directly, images may not automatically import. If you view it in VS Code, GitHub, Obsidian, or many Markdown viewers, the images will show as long as the relative paths stay valid.
+If these notes get moved into Google Docs, the images may need to be inserted manually. GitHub/VS Code/Obsidian should show them as long as the paths stay the same.

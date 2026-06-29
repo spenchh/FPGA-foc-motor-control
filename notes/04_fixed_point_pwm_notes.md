@@ -28,7 +28,7 @@ Cons:
 
 - Requires range analysis.
 - Requires scaling decisions.
-- Overflow can silently break control quality.
+- Overflow can silently break control quality, which is extremely rude.
 - Needs saturation and anti-windup.
 
 ## Suggested Fixed-Point Starting Points
@@ -61,7 +61,7 @@ Examples with 100 MHz FPGA clock:
 | 50 kHz | 2000 | 11.0 bits |
 | 100 kHz | 1000 | 10.0 bits |
 
-Higher PWM frequency reduces current ripple but increases switching losses. The best frequency is an efficiency tradeoff, not automatically the highest possible frequency.
+Higher PWM frequency reduces current ripple but increases switching losses. So the move is not "max PWM frequency because FPGA go brrr." The move is finding the best efficiency tradeoff.
 
 ## PWM Block Requirements
 
@@ -103,4 +103,3 @@ Recommendation:
 - PWM update at wrong time.
 - Deadtime too short or too long.
 - Forgetting fault latch/re-arm behavior.
-

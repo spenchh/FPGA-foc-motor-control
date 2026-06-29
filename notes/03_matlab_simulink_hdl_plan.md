@@ -2,7 +2,7 @@
 
 ## Goal
 
-Use MATLAB/Simulink to build, simulate, convert, and generate HDL for the FPGA-side motor-control pipeline.
+Use MATLAB/Simulink to build the FOC model first, then slowly turn it into something HDL-friendly instead of jumping straight into Verilog and suffering.
 
 ## Workflow
 
@@ -23,7 +23,7 @@ flowchart TD
 
 Purpose:
 
-- Validate the proposal's claim that high PWM frequency reduces current ripple for low-inductance motors.
+- Check the proposal's claim that higher PWM frequency reduces current ripple for low-inductance motors.
 
 Sweep:
 
@@ -109,4 +109,3 @@ Keep these outside HDL:
 - MathWorks HDL Coder: https://www.mathworks.com/help/hdlcoder/
 - MathWorks Motor Control Blockset: https://www.mathworks.com/help/mcb/
 - HDL code generation workflow: https://www.mathworks.com/help/hdlcoder/gs/hdl-code-generation-workflow.html
-

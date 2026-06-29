@@ -1,8 +1,6 @@
 # SURG FPGA/MCU FOC Research Notes
 
-Working notes for the FPGA side of the SURG lightweight-motor FOC project.
-
-Last updated: 2026-06-28
+Working notes for the FPGA side of the SURG lightweight-motor FOC project. This is half research notes, half "stuff we should not forget before the PCB gets locked."
 
 ## 1. What changed from the proposal
 
@@ -16,16 +14,16 @@ The proposal frames the controller as three functions:
 
 Source: attached SURG proposal PDF, Appendix figures.
 
-That is still a good starting architecture, but the details need to be sharper before the PCB is finalized:
+That is still a decent starting architecture, but the details need to be way sharper before the PCB is finalized:
 
 - If the FPGA is meant to improve current-control bandwidth, current sensing and rotor-position feedback must reach the FPGA with low latency. If the MCU reads current and sends it to the FPGA slowly, the FPGA advantage mostly disappears.
-- If the FPGA only generates PWM from duty-cycle commands produced by an MCU, it is still useful, but that is a smaller project than "FPGA FOC."
+- If the FPGA only generates PWM from duty-cycle commands produced by an MCU, that is still useful, but that is a smaller project than "FPGA FOC."
 - Safety should not be exclusively "MCU" or exclusively "FPGA." The best split is layered: hard analog/gate-driver protections, fast FPGA shutdown/interlocks, and slower MCU supervision/logging/recovery.
 - The SimpleFOC DriveShield/DRV8320H direction is a practical low-voltage test platform, but it is 3PWM hardware-configured. That affects how the FPGA pins must be wired.
 
 ## 2. Chat Summary
 
-The exported team chat is mostly coordination, with a few technical links:
+The chat export is mostly coordination, with a few technical links:
 
 - Spencer shared the STM32N6570-DK board.
 - Spencer shared the STM32duino Arduino core.
@@ -39,21 +37,21 @@ Useful links from the chat:
 - STM32duino Arduino core: https://github.com/stm32duino/Arduino_Core_STM32
 - SimpleFOC STM32 docs: https://docs.simplefoc.com/stm32_mcu
 
-Important interpretation: the STM32N6570-DK is a powerful MCU/edge-AI development board, not an FPGA board. It could be the MCU half of a split architecture, but it cannot replace the FPGA unless the project scope changes.
+Main point: the STM32N6570-DK is a powerful MCU development board, not an FPGA board. It could be the MCU half of a split architecture, but it cannot replace the FPGA unless the project scope changes.
 
 ## 2A. Internal Notes and Spreadsheets Summary
 
-The additional team documents make the current direction clearer than the original proposal.
+The extra team docs make the current direction way clearer than the original proposal.
 
 ### Meeting Notes
 
-`6_21 Meeting notes.docx` is very short:
+`6_21 Meeting notes.docx` is super short:
 
 - Action items.
 - BOM.
 - Create SimpleFOC shield.
 
-`6_22 Notes.docx` is much more important. It says "No more simple FOC" and defines this split:
+`6_22 Notes.docx` is way more important. It says "No more simple FOC" and defines this split:
 
 | Block | Team note | Interpretation |
 |---|---|---|
@@ -63,14 +61,14 @@ The additional team documents make the current direction clearer than the origin
 | Inverter | Switches 96 V DC bus into U/V/W motor phases | Final system is high voltage relative to DRV8320/SimpleFOC Drive limits. |
 | Motor | Sends current/position/temp feedback | Feedback routing is central to PCB architecture. |
 
-This matches the architecture I would recommend: MCU for command/logging/supervisory safety, FPGA for the deterministic current-control loop and fast shutdown.
+This basically matches the architecture we should be aiming for: MCU for command/logging/supervisory safety, FPGA for the deterministic current-control loop and fast shutdown.
 
 ### SimpleFOC Notes
 
-`a.f. simplefoc notes.docx` contains useful background even if the team is moving away from directly using SimpleFOC:
+`a.f. simplefoc notes.docx` is still useful even if we are moving away from directly using SimpleFOC:
 
 - Target/benchmark motor context includes a QS260 5000 W scooter motor and Kelly Mini KLS9620M controller specs.
-- SimpleFOCShield and SimpleFOCDrive are useful learning/prototype references, but their voltage/current ratings are far below the 96 V/high-current target.
+- SimpleFOCShield and SimpleFOCDrive are useful learning/prototype references, but their voltage/current ratings are way below the 96 V/high-current target.
 - Hall sensors are included on the motor, spaced 120 electrical degrees, and likely need pullups if open-drain/open-collector.
 - The SimpleFOC bring-up sequence is still a good staged testing checklist:
   - sensor test
@@ -92,7 +90,7 @@ How to use this diagram for FPGA work:
 - FPGA math: Clarke, Park, current PI loops, feed-forward if used, inverse Park/Clarke or SVPWM.
 - FPGA outputs: PWM duty cycles and gate-driver enable/fault state.
 
-One nuance: the note "FPGAs do not have interrupts" is directionally useful, but the better wording is that FPGA logic does not usually use CPU-style interrupt service routines. In HDL, you normally build counters, edge detectors, state machines, and handshake logic that run concurrently every clock cycle.
+Small nuance: the note "FPGAs do not have interrupts" is directionally useful, but the better wording is that FPGA logic does not usually use CPU-style interrupt service routines. In HDL, you normally build counters, edge detectors, state machines, and handshake logic that run concurrently every clock cycle.
 
 ### TI / High-Voltage Inverter Notes
 
@@ -100,7 +98,7 @@ One nuance: the note "FPGAs do not have interrupts" is directionally useful, but
 
 > Monitoring an analog output with an MCU ADC is not sufficient for detecting short-circuit and overcurrent events as fast as possible.
 
-That supports the layered safety recommendation:
+That supports the layered safety take:
 
 - Fast overcurrent protection should happen in hardware/gate-driver/comparator/FPGA logic.
 - MCU ADC monitoring is useful for telemetry and slower safety decisions, but not as the only short-circuit protection.
@@ -136,7 +134,7 @@ Extracted Kelly-style wiring reference:
 
 ![Kelly KLS-N controller wiring reference extracted from team notes](assets/source_docs/a_f__to_look_into_media_03.png)
 
-Useful conclusion: the final controller is not just "FOC math plus PWM." It also needs all the boring but decisive system I/O: throttle, foot switch, brake, forward/reverse, hall/position, motor temp, contactor/key switch/fuse, CAN/logging, and fault handling.
+Useful conclusion: the final controller is not just "FOC math plus PWM." It also needs all the boring-but-crucial system I/O: throttle, foot switch, brake, forward/reverse, hall/position, motor temp, contactor/key switch/fuse, CAN/logging, and fault handling.
 
 ### Spreadsheets
 
@@ -176,7 +174,7 @@ Useful conclusion: the final controller is not just "FOC math plus PWM." It also
 
 ## 3. My Take: Safety on FPGA vs MCU
 
-Your instinct is right for fast protection, but your lead is also right if they mean "do not put every safety feature in FPGA just because FPGA sounds faster."
+Your instinct is right for fast protection, but your lead also has a point if they mean "do not put every safety feature in FPGA just because FPGA sounds faster."
 
 Recommended split:
 
@@ -192,9 +190,9 @@ Practical rule:
 
 - FPGA should be able to shut the bridge down immediately without asking the MCU.
 - MCU should decide whether the system is allowed to run, explain/log faults, and control restart.
-- Gate driver/hardware should protect the MOSFETs even if both digital chips misbehave.
+- Gate driver/hardware should protect the MOSFETs even if both digital chips are having a bad day.
 
-So the answer is not "safety on MCU" or "safety on FPGA." The answer is:
+So the answer is not really "safety on MCU" or "safety on FPGA." The answer is:
 
 > Put fast protection in hardware/FPGA, put policy and recovery in the MCU, and route critical fault lines to both.
 
@@ -222,11 +220,11 @@ Core idea:
 
 - MCU handles slow and human-facing logic.
 - FPGA handles deterministic fast loop.
-- The gate driver remains the last line of power-stage protection.
+- The gate driver remains the last line of power-stage protection. Do not make the MCU babysit every scary power-stage fault.
 
 ## 5. FPGA Work You Should Own
 
-For your assignment, the strongest FPGA deliverables are:
+For the FPGA assignment, the strongest things to actually make are:
 
 1. Build a floating-point Simulink FOC reference model.
 2. Add a plant model: PMSM/BLDC, inverter, current sensors, encoder.
@@ -252,7 +250,7 @@ Useful official references:
 - Fixed-point conversion in HDL Coder: https://www.mathworks.com/help/hdlcoder/ug/floating-point-to-fixed-point-conversion.html
 - Fixed-Point Designer: https://www.mathworks.com/help/fixedpoint/getting-started-with-fixed-point-toolbox.html
 
-Recommended workflow:
+Suggested workflow:
 
 ```mermaid
 flowchart TD
@@ -270,7 +268,7 @@ flowchart TD
 Subsystem boundary suggestion:
 
 - Put only the deterministic fast-control path inside the HDL subsystem.
-- Keep logging, serial parsing, CAN, and configuration UI outside HDL.
+- Keep logging, serial parsing, CAN, and configuration UI outside HDL. That stuff does not need to be in the fast loop.
 - Avoid dynamic memory, variable-size arrays, unsupported MATLAB functions, and complex control flow inside the HDL subsystem.
 
 ## 7. FOC Algorithm Blocks for HDL
@@ -294,7 +292,7 @@ Notes:
 - `iq` controls torque; throttle should map mainly to `iq_ref`, not directly to PWM duty.
 - Rotor angle is mandatory for sensored FOC. It can come from encoder, Hall sensors with interpolation, resolver, or observer.
 - The FPGA should use a consistent per-unit system early. For example: currents, voltages, and duty cycles normalized to `[-1, 1]`.
-- PI loops need saturation and anti-windup. Forgetting this will make fixed-point overflow and startup behavior ugly.
+- PI loops need saturation and anti-windup. Forgetting this will make fixed-point overflow and startup behavior ugly real quick.
 
 ## 8. Fixed Point vs Floating Point on FPGA
 
@@ -314,7 +312,7 @@ Fixed point:
 - Lower area/power/latency when designed well.
 - More appropriate for a compact motor-control datapath.
 
-Suggested development strategy:
+Development strategy:
 
 1. Start floating point.
 2. Add signal logging for all internal ranges: `ia`, `ib`, `id`, `iq`, errors, PI integrators, `vd`, `vq`, `valpha`, `vbeta`, duty.
@@ -334,7 +332,7 @@ Starter Q-format guesses, to be verified by simulation:
 | Duty outputs | unsigned 12 to 16 bits | Match PWM counter resolution. |
 | Angle | unsigned 16 to 18 bits circular | Easy wraparound for electrical angle. |
 
-Key risk: fixed-point mistakes do not always look like obvious crashes. They look like motor noise, torque ripple, unstable current loops, or duty commands stuck at rails.
+Key risk: fixed-point mistakes do not always look like obvious crashes. They show up as motor noise, torque ripple, unstable current loops, or duty commands stuck at rails. Fun times.
 
 ## 9. PWM on the FPGA
 
@@ -359,13 +357,13 @@ PWM frequency = FPGA_clock / PWM_counts
 100 MHz clock, 100 kHz PWM -> 1000 counts -> ~10 bits
 ```
 
-Do not blindly maximize PWM frequency. Higher PWM frequency reduces current ripple in low-inductance motors, but switching losses and MOSFET heating rise with frequency. The real goal is to find the best efficiency point, not simply the highest frequency.
+Do not blindly maximize PWM frequency. Higher PWM frequency reduces current ripple in low-inductance motors, but switching losses and MOSFET heating rise with frequency. The real goal is the best efficiency point, not just "FPGA fast, crank it."
 
 ## 10. SimpleFOC / DRV8320H Notes
 
 The SimpleFOC DriveShield v1.2 uses a DRV8320H gate driver in hardware-configured 3PWM mode. The repo describes the board as DRV8320H, hardware configuration, 3PWM, with protections including undervoltage lockout, charge pump fault, MOSFET overcurrent, MOSFET short circuit, gate-driver fault, and overtemperature.
 
-Important voltage caveat:
+Voltage caveat:
 
 - DRV8320 is a low-voltage MOSFET gate-driver family with a recommended `VM` range up to 60 V.
 - Your team notes mention a 96 V DC bus and a Kelly controller operating in the 48-96 V class.
@@ -385,7 +383,7 @@ DRV8320H block diagram:
 
 Source: TI DRV8320 datasheet, Figure 8-1.
 
-Important DRV8320 interpretation:
+DRV8320 interpretation:
 
 - `VM` is the motor/gate-driver power input.
 - `VDRAIN` senses the high-side MOSFET drain bus for VDS monitoring.
@@ -412,7 +410,7 @@ Implication for FPGA:
 
 ## 11. Current Sensing and ADC Routing
 
-This is the biggest architecture decision for FPGA usefulness.
+This is probably the biggest architecture decision for FPGA usefulness.
 
 For FPGA FOC, the FPGA needs current samples in time to compute the next PWM update. Options:
 
@@ -423,7 +421,7 @@ For FPGA FOC, the FPGA needs current samples in time to compute the next PWM upd
 | SoC FPGA with ADC expansion | FPGA board has ADC or compatible ADC shield | Good for prototyping | Board-specific, may not match final PCB |
 | Use MCU for FOC, FPGA only PWM | MCU does current loop, FPGA does PWM timing/interlocks | Easier integration | Less compelling research claim |
 
-Recommendation:
+My take:
 
 > If the research claim is FPGA-accelerated FOC, route current and position feedback directly to the FPGA or to an FPGA-adjacent ADC interface. Let the MCU see copies or summaries for logging.
 
@@ -452,7 +450,7 @@ Possible inputs:
 - Resolver interface.
 - Sensorless observer, later.
 
-Recommendation:
+My take:
 
 - Start with quadrature encoder or magnetic SPI encoder if the motor setup supports it.
 - FPGA is excellent for quadrature counting and timestamping.
@@ -530,9 +528,9 @@ Concern:
 
 Source: https://www.mathworks.com/help/mcb/gs/implement-foc-on-fpga-soc.html
 
-## 14. PCB Questions for Tonight
+## 14. PCB Questions
 
-These are the questions I would bring to whoever is making the schematic:
+Questions to bring up before the schematic gets locked:
 
 1. Which exact gate driver is the PCB using: DRV8320H, DRV8323, or something else?
 2. Is the gate driver configured for 3PWM or 6PWM?
@@ -569,7 +567,7 @@ These are the questions I would bring to whoever is making the schematic:
 
 ## 15. First Simulation Plan
 
-Start with a simulation before choosing final HDL details.
+Start with simulation before choosing final HDL details. Otherwise we are just guessing with extra steps.
 
 ### Simulation 1: PWM/current-ripple comparison
 
@@ -712,7 +710,7 @@ Stage 2 should be a separate high-voltage inverter effort:
   Layout: creepage, clearance, phase-current paths, Kelvin sense, ground strategy
 ```
 
-This gives you a real FPGA FOC story while keeping the first hardware revision survivable. It also avoids accidentally treating the SimpleFOC/DRV8320 ecosystem as a 96 V-ready power-stage design.
+This gives us a real FPGA FOC story while keeping the first hardware revision survivable. It also avoids accidentally treating the SimpleFOC/DRV8320 ecosystem like it is magically 96 V-ready. It is not.
 
 ## 19. Sources
 

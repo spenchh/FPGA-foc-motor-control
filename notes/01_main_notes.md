@@ -1,14 +1,12 @@
-# SURG FPGA/MCU FOC Master Notes
-
-Last updated: 2026-06-28
+# SURG FPGA/MCU FOC Notes
 
 ## Project Goal
 
-We are investigating whether an FPGA-accelerated field-oriented-control (FOC) motor controller can improve cost and energy efficiency for lightweight, low-inductance motors compared with commercial motor controllers. The core hypothesis is that faster deterministic current control and PWM can reduce current ripple and improve efficiency, especially for lightweight motors where current changes quickly.
+We are trying to see if FPGA-accelerated FOC can make lightweight motor control cheaper/more efficient than just buying a commercial controller. The basic idea is: lightweight motors usually have low inductance, so current can move around fast. If our current loop and PWM are faster/more deterministic, maybe we can reduce ripple and waste less energy.
 
 ## Current Architecture Direction
 
-The updated team notes point toward an FPGA/MCU split:
+The current team notes point toward an FPGA/MCU split:
 
 | Block | Responsibility |
 |---|---|
@@ -18,22 +16,22 @@ The updated team notes point toward an FPGA/MCU split:
 | Inverter | Switches the DC bus into U/V/W motor phases |
 | Motor/sensors | Provides current, position, and temperature feedback |
 
-This is a good architecture. The FPGA should own the fast deterministic loop; the MCU should own supervisory logic and communication.
+This split honestly makes sense. FPGA gets the fast loop; MCU gets the slower "manage the whole system and talk to stuff" job.
 
-## Important Correction: SimpleFOC/DRV8320 Is Low Voltage
+## Big Correction: SimpleFOC/DRV8320 Is Low Voltage
 
 SimpleFOC and the DRV8320H board are useful for learning and low-voltage prototyping, but not for the final 96 V inverter.
 
 - DRV8320 is a low-voltage MOSFET gate-driver family with recommended `VM` up to 60 V.
 - Team notes mention a 96 V DC bus and Kelly controller class hardware.
 - Therefore, SimpleFOC/DRV8320 can be stage-1 only.
-- The final inverter needs a high-voltage design pass: gate-driver voltage margin, isolation, current sensing, creepage/clearance, protection, thermal design, and proper layout.
+- The final inverter needs a high-voltage design pass: gate-driver voltage margin, isolation, current sensing, creepage/clearance, protection, thermal design, and proper layout. Basically, we cannot just "scale up" a SimpleFOC shield and call it a day.
 
 ## Recommended Two-Stage Plan
 
 ### Stage 1: Low-Voltage Prototype
 
-Goal: prove the control architecture without risking the high-voltage system.
+Goal: prove the control architecture without immediately messing with the spicy 96 V system.
 
 ```text
 MCU:
@@ -60,7 +58,7 @@ Motor:
 
 ### Stage 2: 96 V-Class Prototype
 
-Goal: build a real high-voltage inverter after the loop/control architecture is validated.
+Goal: build the real high-voltage inverter after the control loop is not sketchy anymore.
 
 ```text
 Gate driver:
@@ -86,7 +84,7 @@ Protection:
 
 ## Safety Split
 
-Safety should be layered, not owned by only one chip.
+Safety should be layered, not owned by only one chip. Putting everything on the MCU is too slow for some faults, but putting everything on the FPGA is also kinda doing too much.
 
 | Layer | Location | Purpose |
 |---|---|---|
@@ -97,7 +95,7 @@ Safety should be layered, not owned by only one chip.
 
 Good rule:
 
-> FPGA should be able to shut down PWM immediately. MCU should decide when the system may start again. Hardware should protect the power stage even if both digital chips fail.
+> FPGA should be able to shut down PWM immediately. MCU should decide when the system may start again. Hardware should still protect the power stage if the digital side is having a bad day.
 
 ## FOC Data Path
 
@@ -115,7 +113,7 @@ phase currents ia/ib/ic
   -> gate driver
 ```
 
-For a throttle-like application:
+For our throttle-ish application:
 
 - Throttle should map to `iq_ref`, not directly to duty cycle.
 - `iq` controls torque.
@@ -125,7 +123,7 @@ For a throttle-like application:
 
 ## MATLAB / Simulink / HDL Coder Work
 
-Your FPGA-side work should focus on:
+FPGA-side work should probably focus on:
 
 1. Build a floating-point Simulink FOC reference model.
 2. Add motor/inverter/current-sensor plant modeling.
@@ -155,7 +153,7 @@ Fixed point:
 
 - More work, but better for FPGA area/power/latency.
 - Needs range analysis, scaling, saturation, and overflow checks.
-- Probably the right final implementation style for a compact motor controller.
+- Probably the right final implementation style for a compact motor controller, even though it is more annoying.
 
 First-pass type ideas:
 
@@ -171,7 +169,7 @@ First-pass type ideas:
 
 ## Current Sensing Decision
 
-This is a central PCB/architecture decision.
+This is a huge PCB/architecture decision.
 
 If FPGA is doing real FOC, current samples should reach the FPGA with low latency.
 
@@ -184,7 +182,7 @@ Best direction:
 Risky direction:
 
 - Current sensors -> MCU ADC -> MCU sends values to FPGA.
-- This may add latency/jitter and weaken the FPGA benefit.
+- This may add latency/jitter and kinda defeats the point of using the FPGA for the fast loop.
 
 ## Rotor Position
 
@@ -196,11 +194,11 @@ Possible feedback:
 - Resolver.
 - Sensorless observer later.
 
-For first prototype, use the simplest reliable sensored option. FPGA is good at quadrature counting, Hall capture, timestamping, and angle interpolation.
+For the first prototype, use the simplest reliable sensored option. FPGA is good at quadrature counting, Hall capture, timestamping, and angle interpolation.
 
 ## PCB Meeting Questions
 
-Most important:
+Stuff to ask before the schematic gets locked:
 
 1. Is this PCB low-voltage learning hardware or the 96 V inverter?
 2. What exact gate driver is being used?
@@ -244,9 +242,9 @@ DE10-Nano SoC FPGA board:
 
 ![DE10-Nano block diagram](../assets/de10_nano_blockdiagram.jpg)
 
-## Near-Term Personal To-Do
+## Near-Term To-Do
 
-For the FPGA assignment:
+For the FPGA side:
 
 - Learn HDL Coder workflow.
 - Build a floating-point FOC model.
@@ -268,4 +266,3 @@ For the FPGA assignment:
 - MathWorks FOC examples: https://www.mathworks.com/help/mcb/
 - STM32N6570-DK: https://www.st.com/en/evaluation-tools/stm32n6570-dk.html
 - Terasic DE10-Nano: https://www.terasic.com.tw/cgi-bin/page/archive.pl?CategoryNo=167&Language=English&No=1046
-

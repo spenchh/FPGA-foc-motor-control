@@ -1,6 +1,6 @@
 # PCB and Hardware Questions
 
-Use this as a checklist before the schematic/pinout gets locked.
+Use this before the schematic/pinout gets locked, because changing pins later is pain.
 
 ## Project Scope
 
@@ -72,4 +72,3 @@ Use this as a checklist before the schematic/pinout gets locked.
 7. Is startup-at-zero-throttle required?
 8. Is brake input handled?
 9. Is forward/reverse handled?
-

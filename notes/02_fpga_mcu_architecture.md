@@ -1,6 +1,6 @@
 # FPGA/MCU Architecture Notes
 
-## Recommended Split
+## Current Best Split
 
 ```mermaid
 flowchart LR
@@ -56,7 +56,7 @@ Use layered safety:
 - FPGA handles fast deterministic shutdown.
 - MCU handles policy, logging, and restart.
 
-Do not rely on only the MCU ADC loop for short-circuit protection.
+Do not rely only on the MCU ADC loop for short-circuit protection. That is probably too slow for the really ugly faults.
 
 ## 3PWM vs 6PWM
 
@@ -87,4 +87,3 @@ For stage 2:
 
 - Separate 96 V inverter design.
 - Proper high-voltage gate driver/isolation/protection.
-

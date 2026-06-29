@@ -1,27 +1,25 @@
-# SURG FPGA FOC Notes - README
+# SURG FPGA FOC Notes
 
-This folder contains split Markdown notes for the FPGA/MCU field-oriented-control project.
+This folder is just the FPGA/MCU FOC notes split into smaller files so they are less annoying to read.
 
-## What Markdown Is Useful For
+## Why These Are Markdown
 
-Markdown (`.md`) is plain text with light formatting. It is useful because:
+Markdown (`.md`) is basically plain text with headings, links, tables, and image embeds. Lowkey nice because:
 
-- It is easy to copy/paste into Google Docs, Notion, Canvas, GitHub, or email.
-- It keeps headings, bullets, tables, checklists, links, and images readable.
-- It works well with Git/version control, so the team can track changes.
-- It can be converted later into PDF, DOCX, slides, or a project website.
-- Image links can point to local project files like `../assets/drv8320_page23-23.png`.
+- It opens cleanly on GitHub.
+- It is easy to move into Google Docs later.
+- Git can track edits without turning everything into chaos.
+- Images still work if the `assets/` folder stays in place.
 
 ## Files
 
-- `01_copy_paste_master_notes.md` - compact master notes you can paste into a doc/chat.
-- `02_fpga_mcu_architecture.md` - recommended FPGA/MCU/gate-driver split.
-- `03_matlab_simulink_hdl_plan.md` - MATLAB, Simulink, HDL Coder, and simulation plan.
+- `01_main_notes.md` - main notes, not too tiny and not insanely long.
+- `02_fpga_mcu_architecture.md` - FPGA/MCU/gate-driver split.
+- `03_matlab_simulink_hdl_plan.md` - MATLAB, Simulink, HDL Coder, and sim plan.
 - `04_fixed_point_pwm_notes.md` - fixed-point arithmetic, PWM, SVPWM, and HDL details.
 - `05_pcb_questions.md` - questions for PCB schematic/design meetings.
-- `06_image_asset_index.md` - list of extracted images and what each one is for.
+- `06_image_asset_index.md` - where the pics are and what they are.
 
-The larger full notebook is still here:
+Longer full notes are here too:
 
 - `../SURG_FPGA_FOC_Research_Notes.md`
-
