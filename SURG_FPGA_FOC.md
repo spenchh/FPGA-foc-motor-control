@@ -4,9 +4,13 @@
 - **Source Type:** Datasheets; reference designs; vendor manuals; product documentation; official MATLAB/Simulink examples.
 - **Key Authors/Entities:** Texas Instruments; MathWorks; SimpleFOC; Terasic; Intel FPGA; STMicroelectronics; Kelly Controls; Prohelion; Analog Devices; Littelfuse/IXYS.
 - **Temporal Context:** Sources reviewed June 29, 2026. DRV8320 revised March 2022. DRV8353M active 100 V gate-driver datasheet consulted. SimpleFOC DriveShield v1.2 released August 24, 2024. TIDA-01418 revised April 2018. UCC21550 revised August 2024. UCC21750 revised January 2023. AD7403 revised December 2023. INA241 revised December 2024.
+- **Figures:** Original schematic summaries derived from the cited datasheets and vendor examples.
 
 ## 2. Core Thesis & Primary Findings
 - **The Main Argument:** FPGA value appears when deterministic current-loop FOC, PWM/SVPWM, sensor capture, and fast shutdown live in hardware. MCU value remains supervisory: throttle mapping, CAN, logging, state control, calibration, and non-critical safety policy.
+
+![FPGA and MCU FOC partition](assets/fpga_mcu_partition.svg)
+
 - **Critical Insights:**
   * DRV8320 is a 6-60 V three-phase MOSFET gate driver. It fits low-voltage bring-up, not direct 96 V inverter hardware. Source: [TI DRV8320 datasheet](https://www.ti.com/lit/ds/symlink/drv8320.pdf).
   * SimpleFOC DriveShield v1.2 is a useful schematic study only. Its release lists DRV8320H, 3PWM, 30 V MOSFETs, ACS712 30 A sensing, and 30 V max input. Source: [SimpleFOC DriveShield v1.2](https://github.com/simplefoc/SimpleFOC-driveShield/releases).
@@ -17,6 +21,9 @@
 
 ## 3. Granular Evidence & Data Breakdown
 - **Quantitative Data:**
+
+![Gate-driver voltage classes](assets/gate_driver_voltage_classes.svg)
+
   * DRV8320 operating range: `VM = 6-60 V`.
   * DRV8320 drives three high-side and three low-side N-channel MOSFETs.
   * DRV8320 gate drive: 10 mA-1 A source; 20 mA-2 A sink.
@@ -54,6 +61,9 @@
   * DE10-Nano Arduino header: 17 direct FPGA pins, 16 digital GPIO, one reset, and six analog inputs through LTC2308.
   * STM32N6570-DK MCU: Arm Cortex-M55-based STM32N657X0H3Q; Arduino Uno R3 expansion connector; three CAN FD peripherals.
 - **Qualitative Evidence:**
+
+![DRV8320 phase-A half-bridge pins](assets/drv8320_half_bridge_pins.svg)
+
   * DRV8320 `SHA` is the phase-A half-bridge switch node. It follows motor phase voltage, not a fixed logic rail.
   * DRV8320 `VM` is called an input because the chip is powered from the motor bus. It is not a command input.
   * DRV8320 low-side pins are not "enable" pins. `ENABLE` globally sleeps/enables the driver; `INLx` are low-side control inputs in 6x PWM mode.
@@ -81,5 +91,8 @@
 - **Anomalies:** DRV8320/DRV8353M assume MOSFET bridges, while the linked Littelfuse part is an IGBT. INA241 can measure high-side current up to 110 V common-mode but does not provide galvanic isolation. AMC1306 and AD7403 provide isolation but require digital filtering in FPGA or MCU logic. Hall sensors may be adequate for startup but weak for high-quality FOC unless interpolated or replaced with higher-resolution sensing.
 
 ## 6. Synthesis & Cross-References
+
+![Current sensing paths into FPGA FOC](assets/current_sensing_options.svg)
+
 - **Open Questions:** Is the next PCB low-voltage validation hardware or 96 V inverter hardware? Are power switches MOSFETs, IGBTs, or SiC MOSFETs? Should the 96 V path use DRV8353M, isolated half-bridge drivers, or isolated single-channel drivers? What current sensor wins: INA241 in-line shunts, isolated shunt modulators, low-side shunts, Hall sensors, or mixed sensing? Does current data route directly to the FPGA? What ADC/filter latency fits the current loop? What position sensor supplies electrical angle to the FPGA? What PWM frequency balances current ripple, switching loss, and gate-driver heating? What hardware path disables gates faster than MCU firmware? What creepage, clearance, fuse, precharge, contactor, DC-link, and CAN-isolation rules apply?
 - **Keywords/Tags:** FPGA FOC; MATLAB HDL Coder; Simulink; fixed-point HDL; SVPWM; DRV8320; DRV8353M; UCC21550; UCC21750; INA241; AMC1306; AD7403; IXY15N65C3D1; TIDA-01418; SimpleFOC DriveShield; DE10-Nano; STM32N6570-DK; Kelly KLS-N; WaveSculptor22; current sensing; isolated gate driver; 96 V inverter; overcurrent protection; DESAT; VDS monitoring.
