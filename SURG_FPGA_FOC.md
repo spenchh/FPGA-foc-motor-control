@@ -37,7 +37,7 @@ FPGA stuff to actually work on:
 6. Generate HDL and HDL testbench with HDL Coder.
 7. Synthesize and report FPGA timing/resource usage.
 
-PCB questions we should prolly ask before swe all suffer:
+PCB questions we should prolly ask before we all suffer:
 
 1. Is the board low-voltage prototype or 96 V inverter?
 2. What gate driver is used?
