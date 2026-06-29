@@ -5,11 +5,14 @@
 - **Key Authors/Entities:** Texas Instruments; MathWorks; SimpleFOC; Digilent; AMD/Xilinx; Terasic; Intel FPGA; STMicroelectronics; Kelly Controls; Prohelion; Analog Devices; GigaDevice; Littelfuse/IXYS.
 - **Temporal Context:** Sources reviewed June 29, 2026. DRV8320 revised March 2022. SimpleFOC DriveShield v1.2 released August 24, 2024. TIDA-01418 revised April 2018. UCC21550 revised August 2024. UCC21750 revised January 2023. AD7403 revised December 2023. INA241 revised December 2024. Arty Z7, LTC7063, and GD30DR1488 sources reviewed after the Arty Z7/Zynq direction became the working board assumption.
 - **Figures:** Original schematic summaries derived from the cited datasheets and vendor examples.
+- **Task Tracker:** [FPGA_TODO.md](FPGA_TODO.md).
 
 ## 2. Core Thesis & Primary Findings
 - **The Main Argument:** FPGA value appears when deterministic current-loop FOC, PWM/SVPWM, sensor capture, and fast shutdown live in hardware. MCU value remains supervisory: throttle mapping, CAN, logging, state control, calibration, and non-critical safety policy.
 
 ![FPGA and MCU FOC partition](assets/fpga_mcu_partition.svg)
+
+![Arty Z7 control stack](assets/arty_z7_control_stack.svg)
 
 - **Critical Insights:**
   * Current team direction is high-voltage motor-driver PCB plus a separate prebuilt FPGA/SoC board. The Arty Z7/Zynq path is the active control-board assumption.
@@ -29,6 +32,8 @@
 - **Quantitative Data:**
 
 ![Gate-driver voltage classes](assets/gate_driver_voltage_classes.svg)
+
+![3PWM versus 6PWM decision rule](assets/pwm_gate_driver_decision.svg)
 
   * DRV8320 operating range: `VM = 6-60 V`.
   * DRV8320 drives three high-side and three low-side N-channel MOSFETs.
@@ -131,6 +136,7 @@
 
 ## 7. Current FPGA Work Plan
 - **Working Architecture:** Arty Z7/Zynq is the likely control board. FPGA fabric should own high-rate logic: PWM, Hall capture, fixed-point FOC blocks, current-sense timing, and fast PWM disable. ARM processing system should own high-level software: setup, mode changes, CAN, logging, calibration, and recovery.
+- **Expanded TODO:** [FPGA_TODO.md](FPGA_TODO.md) is formatted for direct Google Docs transfer.
 - **Gate-Driver Decision Rule:** Use 3PWM only with a driver that explicitly generates complementary outputs and deadtime internally. Use 6PWM when the selected driver exposes separate high-side and low-side inputs.
 - **Current-Sense Decision Rule:** Route analog current directly to Arty Z7 XADC or an external ADC if FPGA is expected to close the current loop. ARM/MCU ADC forwarding is acceptable for monitoring but weak for deterministic current-loop FOC.
 - **Immediate Tasks:**
