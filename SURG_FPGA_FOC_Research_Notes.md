@@ -19,17 +19,9 @@ That is still a decent starting architecture but details need to be clearer befo
 - Safety should not be exclusively "MCU" or exclusively "FPGA." The best split is layered: hard analog/gate-driver protections, fast FPGA shutdown/interlocks, and slower MCU supervision/logging/recovery.
 - The SimpleFOC DriveShield/DRV8320H direction is a practical low-voltage test platform, but it is 3PWM hardware-configured. That affects how the FPGA pins must be wired.
 
-## 2. Chat Summary
+## 2. Other Notes
 
-The chat export is mostly coordination, with a few technical links:
-
-- Spencer shared the STM32N6570-DK board.
-- Spencer shared the STM32duino Arduino core.
-- Spencer shared SimpleFOC's STM32 docs.
-- The team is coordinating calls and PCB schematic work.
-- There is no detailed design decision in the chat export yet about FPGA/MCU partitioning, current sensing, PWM mode, or exact board choice.
-
-Useful links from the chat:
+Useful links:
 
 - ST STM32N6570-DK: https://www.st.com/en/evaluation-tools/stm32n6570-dk.html
 - STM32duino Arduino core: https://github.com/stm32duino/Arduino_Core_STM32
