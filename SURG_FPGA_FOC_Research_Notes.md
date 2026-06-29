@@ -1,10 +1,8 @@
-# SURG FPGA/MCU FOC Research Notes
-
-Working notes for the FPGA side of the SURG lightweight-motor FOC project. This is half research notes, half "stuff we should not forget before the PCB gets locked."
+# SURG FPGA/MCU FOC Notes
 
 ## 1. What changed from the proposal
 
-The proposal frames the controller as three functions:
+proposal frames controller as three functions:
 
 1. FPGA: generate high-frequency PWM using FOC.
 2. MCU: telemetry, communication, and safety features.
@@ -14,7 +12,7 @@ The proposal frames the controller as three functions:
 
 Source: attached SURG proposal PDF, Appendix figures.
 
-That is still a decent starting architecture, but the details need to be way sharper before the PCB is finalized:
+That is still a decent starting architecture but details need to be clearer before PCB is finalized:
 
 - If the FPGA is meant to improve current-control bandwidth, current sensing and rotor-position feedback must reach the FPGA with low latency. If the MCU reads current and sends it to the FPGA slowly, the FPGA advantage mostly disappears.
 - If the FPGA only generates PWM from duty-cycle commands produced by an MCU, that is still useful, but that is a smaller project than "FPGA FOC."
