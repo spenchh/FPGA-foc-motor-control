@@ -6,6 +6,7 @@
 - **Temporal Context:** Sources reviewed June 29, 2026. DRV8320 revised March 2022. SimpleFOC DriveShield v1.2 released August 24, 2024. TIDA-01418 revised April 2018. UCC21550 revised August 2024. UCC21750 revised January 2023. AD7403 revised December 2023. INA241 revised December 2024. Arty Z7, LTC7063, and GD30DR1488 sources reviewed after the Arty Z7/Zynq direction became the working board assumption.
 - **Figures:** Original schematic summaries derived from the cited datasheets and vendor examples.
 - **Task Tracker:** [FPGA_TODO.md](FPGA_TODO.md).
+- **MATLAB Starter:** [matlab/foc_fixed_point_starter.m](matlab/foc_fixed_point_starter.m).
 
 ## 2. Core Thesis & Primary Findings
 - **The Main Argument:** FPGA value appears when deterministic current-loop FOC, PWM/SVPWM, sensor capture, and fast shutdown live in hardware. MCU value remains supervisory: throttle mapping, CAN, logging, state control, calibration, and non-critical safety policy.

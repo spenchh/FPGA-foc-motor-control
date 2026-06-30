@@ -41,6 +41,7 @@
 - Clarke/Park transforms.
 - Inverse Park.
 - SVPWM.
+- Run `matlab/foc_fixed_point_starter.m` as the first MATLAB fixed-point simulation.
 
 ## 9. Safety / Fault Behavior
 - FPGA should disable PWM on fault if assigned.
