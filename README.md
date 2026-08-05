@@ -1,126 +1,104 @@
-# Custom Dual-Drive FPGA Motor Controller Architecture
+# SURG FPGA Motor Controller
 
-This repository contains the hardware design files, gateware (Verilog), and software firmware for a custom, isolated dual-drive motor controller system. Designed specifically for high-efficiency electric vehicles (such as solar racing cars), this architecture implements a hardware-accelerated **Field Oriented Control (FOC)** pipeline on an FPGA, managed by a robust microcontroller-driven Motor Interface Board running a passive differential configuration.
+![Project](https://img.shields.io/badge/status-active%20research-1f6feb?style=flat-square)
+![Platform](https://img.shields.io/badge/FPGA-Arty%20Z7--10-2f4f4f?style=flat-square)
+![Control](https://img.shields.io/badge/control-3PWM%20FOC-0076a8?style=flat-square)
+![Tools](https://img.shields.io/badge/tools-MATLAB%20%7C%20Vivado%20%7C%20HDL%20Coder-555555?style=flat-square)
 
----
+PCB-aware FPGA and MATLAB work for the SURG motor controller
 
-## 🛠️ System Architecture Overview
+Current local board files:
 
-To isolate high-voltage switching noise from sensitive digital logic and provide physical modularity, the system is strictly split into three distinct hardware and control layers:
+- `C:\Users\HP\Documents\SURG\DriverBoard.SchDoc`
+- `C:\Users\HP\Documents\SURG\ActualDriverBoard.PcbDoc`
+- `C:\Users\HP\Documents\SURG\HV Motor Driver.BomDoc`
+- `C:\Users\HP\Documents\SURG\PCB_CROSSCHECK_2026-08-05.md`
+- `C:\Users\HP\Documents\SURG\FPGA_KNOWN_INFO_2026-08-05.md`
 
-```
-[ Master Vehicle Inputs ] (Throttle, Brake, Switches, CAN)
-           │
-           ▼
-┌────────────────────────────────────────────────────────┐
-│ Phase 3: Motor Interface Board (Microcontroller)       │
-│ - Galvanic Isolation Barrier (ISO7421 / ISO6740)       │
-│ - Dual DAC (MCP4922) for Independent L/R Throttle      │
-└──────────────────────────┬─────────────────────────────┘
-                           │ (Isolated Signals)
-                           ▼
-┌────────────────────────────────────────────────────────┐
-│ Phase 2: Low-Voltage Logic Board (FPGA)                │
-│ - Core FOC Loop: Clarke/Park & Pipelined PI Loops      │
-│ - High-Speed ADC Decoding & CORDIC Sine/Cosine         │
-│ - Space Vector Modulation (SVM) & Dead-Time Insertion  │
-└──────────────────────────┬─────────────────────────────┘
-                           │ (Synchronized PWM / Gate Drives)
-                           ▼
-===========================▼============================== [Isolation Barrier]
-┌────────────────────────────────────────────────────────┐
-│ Phase 1: High-Voltage Power Board (Inverter)           │
-│ - 96V DC Bus (150V - 200V Rated MOSFETs, TOLL/DFN)     │
-│ - Galvanically Isolated Gate Drivers (UCC21520)        │
-│ - Phase Current Shunts & Isolated Amplifiers (AMC1301)  │
-└────────────────────────────────────────────────────────┘
+## Current Board Interface
 
-```
+Confirmed from the updated cross-check:
 
----
+- control still starts as three phase duty commands in software/math
+- updated PCB exposes physical controller outputs for `MCU HI A`, `MCU LO A`, `MCU HI B`, `MCU LO B`, `MCU HI C`, and `MCU LO C`
+- those six physical lines feed the three UCC21222 gate drivers through small RC input filters
+- UCC21222 adds driver-side interlock/dead-time behavior, but there is no separate onboard logic block that creates the HI/LO input pairs for the FPGA
+- `DISABLE` is routed to the UCC21222 disable pins and should be treated as active-high disable, drive low to run
+- Hall A/B/C are digital labels routed to the controller header
+- Hall pullups appear to be 5 V, so the Zynq/Arty input-level path needs to be checked before hardware connection
+- current sense has three measured channels: `MCU CSENSE A`, `MCU CSENSE B`, and `MCU CSENSE C`
+- voltage sense has `MCU VSENSE A` and `MCU VSENSE Vm`
+- `MCU MOTOR THERM` is also present as an analog/controller input
+- updated board text did not show `nOC` or `FAULT` nets
 
-## 📅 Project Development Phases
+## FPGA Work
 
-### Phase 1: High-Voltage Inverter PCB (Power Stage)
+Active RTL:
 
-This board handles the heavy-lifting muscle of the system, managing the 96V nominal battery pack.
+- `fpga/rtl/pwm_3phase_center_aligned.v`
+- `fpga/rtl/hall_decoder.v`
+- `fpga/rtl/phase_current_balance_monitor.v`
+- `fpga/rtl/phase_current_limit_monitor.v`
+- `fpga/rtl/voltage_sense_monitor.v`
+- `fpga/rtl/pcb_disable_control.v`
 
-* **Specifications & Components:**
-* **DC Bus Voltage:** 96V Nominal (Peak 115V).
-* **Power Switching:** 150V–200V N-Channel MOSFETs featuring ultra-low $R_{ds(\text{on})}$ in high-thermal efficiency **TOLL (TO-Leadless)** or **DFN 8x8** packages.
-* **Gate Drivers:** Dual-channel galvanically isolated gate drivers (**TI UCC21520** or similar) to isolate the 96V domain from logic.
-* **Current Feedback:** In-line or low-side current shunts paired with high-speed isolated amplifiers (**AMC1301**) feeding external ADCs.
-* **Thermal & Power Integrity:** Thick copper weight (2oz or 3oz), massive low-ESR bulk decoupling capacitor bank, and dedicated creepage/clearance channels ($\ge 2\text{mm}$) to prevent electrical arcing.
+Active testbenches:
 
+- `fpga/tb/tb_pwm_3phase_center_aligned.v`
+- `fpga/tb/tb_hall_decoder.v`
+- `fpga/tb/tb_phase_current_balance_monitor.v`
+- `fpga/tb/tb_phase_current_limit_monitor.v`
+- `fpga/tb/tb_voltage_sense_monitor.v`
+- `fpga/tb/tb_pcb_disable_control.v`
 
+What the FPGA layer is trying to cover right now:
 
-### Phase 2: Low-Voltage Logic PCB (FPGA Brain)
+- generate center-aligned phase duty timing
+- expand three duty commands into the updated PCB's physical HI/LO driver-input pins
+- keep all PWM outputs off during reset or inhibit
+- create sample timing for current and voltage reads
+- read Hall states if the voltage-level issue is handled
+- monitor measured A/B/C current consistency
+- monitor per-phase current limits separately from current consistency
+- monitor phase/bus voltage limits
+- drive the PCB `DISABLE` line from confirmed software-side inhibit conditions
 
-The digital engine executing deterministic, nanosecond-latency motor math.
+This is bring-up/control-interface logic, not full fixed-point FOC yet
 
-* **Hardware Design:**
-* Dedicated FPGA development SoC or standalone chip (e.g., Cyclone IV/V or Spartan-7).
-* High-speed connector interface matching the Power Board control lines.
-* Onboard ultra-low jitter clock source for highly precise PWM generation.
+The current control path should be treated as Hall-assisted FOC / bring-up first. Sensorless FOC can be researched later, but it is not the immediate hardware bring-up assumption.
 
+## MATLAB Work
 
-* **Gateware Architecture (Verilog):**
-* **ADC Ingestion Module:** High-speed SPI Master / Delta-Sigma decoder to capture phase current simultaneously at the center of the PWM cycle.
-* **Coordinate Transformation (Fixed-Point Math):** Clarke and Park transformations implemented via a pipelined **CORDIC engine** to handle trigonometric calculations without lookup tables.
-* **Pipelined PI Controllers:** Dual, parallel hardware PI loops regulating $I_d$ (flux) and $I_q$ (torque).
-* **Space Vector Modulation (SVM):** Maximizes DC bus utilization by up to 15.5% compared to standard sine-PWM.
-* **PWM & Dead-Time Generation:** Center-aligned triangle counter with a hardware shift-register delay block to strictly enforce dead-time and eliminate shoot-through risk.
+Current MATLAB focus:
 
+- fixed-point FOC starter math
+- PI behavior and Q-format effects
+- inverse Park / three duty-command generation
+- board-interface check against the updated PCB labels
+- current and voltage scaling placeholders until the analog path is confirmed
 
+Run:
 
-### Phase 3: Motor Interface & Microcontroller Firmware
-
-The supervisory control layer that interfaces with the driver controls and distributes commands.
-
-* **Hardware Isolation Design:**
-* Built around an **nRF52840** or equivalent microcontroller for system management and wireless telemetry.
-* Digital isolators (**ISO7421 / ISO6740**) cleanly split the MCU domain from the noisy motor controller grounds.
-* A dual-channel **MCP4922 12-bit DAC** generates independent analog 0–5V output curves (`THROTTLE_L` and `THROTTLE_R`).
-* CMOS Level Shifters (**CD40109B**) step up logic control switches to `12V_MC` or `5V_MC` levels.
-
-
-* **Firmware Execution Loop:**
-* Ingests physical vehicle inputs: Foot switches, brake pedals, direction toggles, and CAN bus commands.
-* Executes a **Passive Differential Strategy**: Distributes matching, software-profiled throttle voltages across the isolated SPI bus to both controllers, letting the independent hub motors differentiate naturally based on turn physics.
-* Monitors safety boundaries and asserts global hardware shut-offs if a fault is triggered.
-
-
-
----
-
-## 🚀 Repository Structure
-
-```text
-├── hardware/
-│   ├── phase1-hv-inverter/      # Altium/KiCad PCB layouts & schematics (96V Power Stage)
-│   ├── phase2-lv-fpga/          # Altium/KiCad PCB layouts for FPGA logic board
-│   └── phase3-interface-board/  # PCB layouts for isolated Motor Interface Board
-├── gateware/
-│   ├── rtl/                     # Verilog source files (FOC Core, CORDIC, SVM, PWM)
-│   ├── bench/                   # Testbenches for ModelSim/GHDL verification
-│   └── fpga_project.qsf         # FPGA Toolchain configuration files
-└── firmware/
-│   ├── src/                     # Microcontroller C/C++ source code (nRF52840)
-│   ├── lib/                     # Peripheral drivers (DAC, SPI, CAN)
-│   └── platformio.ini           # Firmware build configurations
-
+```matlab
+foc_fixed_point_starter
+stage1_3pwm_foc_sim
+board_interface_check
 ```
 
----
+## Things To Confirm Before PCB Order / Final HDL
 
-## 🛠️ Bring-up & Testing Safety Protocol
-
-Because this project interfaces with a high-energy **96V battery pack**, follow this step-by-step validation sequence to minimize equipment damage:
-
-1. **RTL Simulation:** Verify all fixed-point math and state machines in standard RTL simulation (ModelSim) to check for integer overflows or timing race conditions.
-2. **Logic-Level Validation:** Power the FPGA and Interface Board on a bench without high-voltage hooked up. Use an oscilloscope to verify that the PWM outputs inject the correct dead-time duration.
-3. **Low-Voltage Bench Spinning:** Connect a low-voltage, current-limited bench power supply (e.g., 12V–24V) to the Power Stage. Validate that the FPGA can smoothly spin the motor in open-loop voltage mode.
-4. **Closed-Loop Calibration:** Enable the ADC modules and current PI loops under small mechanical loads, optimizing the torque response.
-5. **High-Voltage Integration:** Gradually scale the DC bus power up to the 96V pack, utilizing inline fuses and an external emergency stop circuit.
-
----
+- exact Arty Z7 shield-header pin map and XDC names
+- whether shield IO is safe with the Hall pullups shown at 5 V
+- whether analog signals use Arty XADC, an external ADC, or another route
+- current-sense zero-current voltage and positive/negative-current representation
+- PWM dead-time policy between FPGA non-overlap and UCC21222 resistor-programmed dead time
+- current shunt values
+- whether current sense has a mid-rail offset for bidirectional current
+- final AMC1300 + OPA4388 gain, offset, and filtering
+- whether current/voltage signals go into XADC, external ADC, or the Zynq PS side
+- final voltage-sense ADC-side scaling and clamp/protection path
+- motor thermistor scaling
+- isolated 12 V source on the driver side
+- OPA4388 symbol pin mapping versus datasheet pinout
+- whether the resistor BOM entries with capacitor-looking MPNs are real mistakes
+- final expected PWM frequency

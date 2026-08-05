@@ -1,0 +1,13 @@
+# Altium local caches / generated artifacts (regenerate on open)
+__Previews/
+History/
+Project Logs*/
+Project Outputs*/
+
+# Office lock files
+~$*
+
+# OS cruft
+Thumbs.db
+Desktop.ini
+.DS_Store

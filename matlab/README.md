@@ -1,6 +1,6 @@
 # MATLAB Starter Notes
 
-This folder is for first-pass MATLAB simulations before moving into Simulink or HDL Coder.
+This folder is for MATLAB checks before moving into Simulink or HDL Coder
 
 ## First Script
 
@@ -12,23 +12,50 @@ foc_fixed_point_starter
 
 What it shows:
 
-- Per-unit scaling.
-- Q1.15 encode/decode behavior.
-- Fixed-point multiply and saturation.
-- Floating-point PI versus fixed-point PI.
-- Basic first-order current-loop response.
-- Clarke/Park transform sanity check.
-- PWM-center sample strobe timing.
+- per-unit scaling
+- Q1.15 encode/decode behavior
+- fixed-point multiply and saturation
+- floating-point PI versus fixed-point PI
+- basic first-order current-loop response
+- Clarke/Park transform check
+- PWM-center sample timing marker
 
-## Suggested Order
+## 3PWM Stage 1 Script
 
-1. Run the script unchanged.
-2. Change `kp_pu`, `ki_pu`, `base_current_A`, and `f_pwm_Hz`.
-3. Compare floating-point and fixed-point plots.
-4. Increase/decrease `Q_FRAC` and observe quantization error.
-5. Move the PI block into a Simulink subsystem.
-6. Convert the PI subsystem to fixed point with HDL Coder later.
+Run:
 
-## Notes
+```matlab
+stage1_3pwm_foc_sim
+```
 
-The script intentionally uses plain MATLAB integer math instead of Fixed-Point Designer objects. That makes the scaling visible and closer to what the FPGA RTL will eventually do.
+What it shows:
+
+- fixed-point-style `id/iq` PI control
+- inverse Park conversion from `vd/vq` to `v_alpha/v_beta`
+- SVPWM-style conversion into `duty_a`, `duty_b`, and `duty_c`
+- center-aligned phase duty timing
+- PWM-center current-sample timing marker
+
+The math/control side stays at three phase duty commands. The updated PCB exposes physical HI/LO driver-input pins, so RTL handles that board-facing expansion
+
+## Board Interface Check
+
+Run:
+
+```matlab
+board_interface_check
+```
+
+What it checks:
+
+- PWM period counts for the 20 kHz assumption
+- physical driver-output labels for `MCU HI/LO A/B/C`
+- `DISABLE` active-high behavior
+- updated current-sense path based on AMC1300 + OPA4388
+- three-current channel naming: `MCU CSENSE A/B/C`
+- voltage-sense net naming for `MCU VSENSE A` and `MCU VSENSE Vm`
+- motor therm input as another analog/controller signal
+- open scaling items before final HDL
+- Hall labels as digital inputs, with the 5 V pullup issue still needing hardware confirmation
+
+This script is tied to the current Altium files and should be updated when the PCB interface changes

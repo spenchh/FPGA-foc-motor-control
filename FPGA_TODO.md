@@ -1,58 +1,98 @@
 # FPGA TODO List
 
 ## 1. Learn Arty Z7 / Zynq Basics
-- Understand ARM processing system versus FPGA fabric.
-- Learn Vivado project setup.
-- Install Digilent board files.
+
+- understand PS versus PL split
+- PS: setup, commands, logging, communication, slower control decisions
+- PL: deterministic PWM timing, sample strobes, fast inhibit, sensor interface checks
+- learn Vivado project setup
+- install Digilent board files
+- learn how Arduino-header pins map to FPGA pins
 
 ## 2. Build First Vivado Test Project
-- Blink an LED from FPGA fabric.
-- Confirm constraints/XDC workflow.
-- Learn how Arduino-header pins map to FPGA pins.
 
-## 3. Make a Basic 3PWM Generator
-- Programmable frequency.
-- Programmable duty cycle.
-- Enable input.
-- Safe reset state where PWM outputs are off.
+- blink an LED from FPGA fabric
+- confirm constraints/XDC workflow
+- confirm clock source and PL fabric clock
+- confirm the Arduino-header IO bank voltage
+- create a Vivado simulation project with the current `fpga/rtl` and `fpga/tb` files
+- do not make final PCB XDC constraints until the board-side net-to-header mapping is confirmed
 
-## 4. Compare 3PWM vs 6PWM
-- 3PWM only works if the gate driver handles complementary outputs and deadtime.
-- 6PWM is needed if the driver exposes separate high-side and low-side inputs.
-- 6PWM lets FPGA control deadtime directly.
+## 3. PWM Bring-Up
 
-## 5. Research Current Sensing Into FPGA
-- Check Arty Z7 XADC limits and sample rate.
-- Decide XADC versus external ADC versus ARM ADC.
-- Figure out whether current sampling can sync to PWM center.
+- keep software/math at three phase duty commands
+- generate center-aligned timing from `duty_a`, `duty_b`, and `duty_c`
+- expand those duty commands into physical `MCU HI/LO A/B/C` driver-input pins
+- include `enable`, `pwm_inhibit`, and reset-off behavior
+- include a configurable `nonoverlap_ticks` value for the physical HI/LO outputs
+- load all three duties together at the PWM cycle boundary
+- flag invalid PWM config before enabling outputs
+- confirm expected PWM frequency with the team
 
-## 6. Build Hall Sensor Input Logic
-- Read Hall A/B/C.
-- Decode rotor sector.
-- Track transitions and estimate speed.
+## 4. Updated PCB Interface
 
-## 7. Learn AXI / Shared Register Interface
-- ARM writes duty/Iq command, enable, and mode.
-- FPGA reports fault flags, Hall state, current data, and telemetry.
+- use `C:\Users\HP\Documents\SURG\PCB_CROSSCHECK_2026-08-05.md` as the latest local cross-check
+- board files are `DriverBoard.SchDoc`, `ActualDriverBoard.PcbDoc`, and `HV Motor Driver.BomDoc`
+- confirmed physical driver-input labels are `MCU HI A`, `MCU LO A`, `MCU HI B`, `MCU LO B`, `MCU HI C`, and `MCU LO C`
+- `DISABLE` should be treated as active-high disable, drive low to run
+- updated board did not show `nOC` or `FAULT` nets
+- do not keep dedicated protection/status RTL unless a real routed status signal is confirmed
 
-## 8. Start Fixed-Point FOC Research
-- Q-format numbers.
-- PI controller.
-- Clarke/Park transforms.
-- Inverse Park.
-- SVPWM.
-- Run `matlab/foc_fixed_point_starter.m` as the first MATLAB fixed-point simulation.
+## 5. Current Sensing Into FPGA
 
-## 9. Safety / Fault Behavior
-- FPGA should disable PWM on fault if assigned.
-- Gate-driver/chip protection should be the first layer.
-- ARM handles logging, recovery, and re-enable.
-- PWM and ENABLE should default off during FPGA reset/programming.
+- updated board points to measured A/B/C current sense
+- current path is shunt -> AMC1300 -> OPA4388 -> `MCU CSENSE A/B/C`
+- keep phase-C reconstruction only as a cross-check/fallback idea
+- separate current-balance checking from per-phase overcurrent checking
+- confirm shunt values
+- confirm current-sense gain
+- confirm whether bidirectional current has a mid-rail offset
+- confirm ADC input range and clamp/protection
+- confirm whether this goes through Arty XADC, external ADC, or PS-side ADC path
 
-## 10. Hardware Info Still Needed From PCB Side
-- Final gate-driver choice.
-- Exact Arduino-header pin map.
-- Whether the driver is 3PWM or 6PWM.
-- Current-sensor voltage range.
-- Fault signals routed to FPGA.
-- Expected PWM frequency.
+## 6. Voltage Sensing Into FPGA
+
+- updated board exposes `MCU VSENSE A` and `MCU VSENSE Vm`
+- handle voltage sense like current sense: scaling, offset, filtering, ADC limits, and fixed-point range
+- divider looks like 1.5 Mohm top and 20 kohm bottom before the isolation amp
+- confirm final ADC-side scaling
+- confirm ADC route
+
+## 7. Hall / Position Feedback
+
+- updated board shows digital Hall A/B/C into the controller header
+- keep Hall decoder RTL in the local required set
+- confirm Hall pullups are not feeding unsafe 5 V into Zynq IO
+- confirm actual pin map before writing XDC constraints
+- near-term direction is Hall-assisted FOC / bring-up, not fully sensorless FOC yet
+- sensorless FOC can stay as later research once measured current/voltage behavior is understood
+
+## 8. AXI / Shared Register Interface
+
+- PS writes duty command, enable, mode, thresholds, and reset/clear bits
+- PL reports PWM status, current data, voltage data, Hall status, inhibit state, and counters
+- define register map after the pin map and ADC route are known
+
+## 9. MATLAB / Fixed-Point Work
+
+- run `matlab/foc_fixed_point_starter.m`
+- run `matlab/stage1_3pwm_foc_sim.m`
+- run `matlab/board_interface_check.m`
+- fill in current-sense scale once shunt/gain/offset are known
+- fill in voltage-sense scale once ADC-side path is known
+- later move PI / Clarke / Park / inverse Park into Simulink and HDL Coder
+
+## 10. Board Questions For PCB Team
+
+- confirm board-side net-to-header mapping so I can write Arty/Zynq XDC
+- confirm analog input path: Arty XADC, external ADC, or other
+- confirm current-sense zero-current voltage and positive/negative-current mapping
+- confirm dead-time policy: FPGA non-overlap, UCC21222 dead-time, or both intentionally
+- is the OPA4388 symbol pin mapping correct versus the datasheet
+- what actually sources `12V ISO`
+- are the resistor BOM entries with capacitor-looking MPNs mistakes
+- how is bidirectional current represented at `MCU CSENSE A/B/C`
+- are Hall lines level-shifted or clamped before the Zynq/Arty input pins
+- where do current, voltage, and motor therm enter the Zynq system
+- does the board intentionally put 12 V on shield VIN
+- what PWM frequency should the driver board be designed around

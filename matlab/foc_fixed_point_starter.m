@@ -84,7 +84,7 @@ grid on;
 xlabel("time (s)");
 ylabel("error (A)");
 
-%% Clarke/Park transform sanity check
+%% Clarke/Park transform check
 theta = linspace(0, 2*pi, 800);
 phase_amp_pu = 0.45;
 
@@ -97,7 +97,7 @@ ic = phase_amp_pu * cos(theta + 2*pi/3);
 
 [id_fixed, iq_fixed_tr] = park_q15_demo(ia, ib, theta, Q_SCALE, Q_FRAC, Q_MIN, Q_MAX);
 
-figure("Name", "Clarke/Park transform sanity check");
+figure("Name", "Clarke/Park transform check");
 subplot(2, 1, 1);
 plot(theta, id_float, "b", theta, id_fixed, "r:");
 grid on;
