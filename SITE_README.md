@@ -17,36 +17,32 @@ browsers block some behaviour on local files. Any static server works.
 **Python** (installed on this machine):
 
 ```bash
-cd site
 python -m http.server 8080
 ```
 
 **Node** (also installed):
 
 ```bash
-cd site
 npx serve -l 8080
 ```
 
-Then open <http://localhost:8080>.
+Run either from the repo root, then open <http://localhost:8080>.
 
 ---
 
 ## Deploying to GitHub Pages
 
-Pages' branch source can only serve from `/` or `/docs` — **not** from an
-arbitrary folder like `/site`. So this repo publishes via GitHub Actions instead:
-[`.github/workflows/pages.yml`](../.github/workflows/pages.yml) uploads `site/`
-as the Pages artifact on every push to `main`.
+`index.html` and `assets/` live at the repo root, which is exactly what Pages'
+branch source expects. No build step and no Actions workflow are involved.
 
 To switch it on:
 
 1. The repo must be **public**, unless the account has GitHub Pro/Team — Pages
    does not publish from private repos on the free plan.
-2. **Settings → Pages → Build and deployment → Source: GitHub Actions.**
-3. Push to `main` (or run the workflow manually from the Actions tab).
+2. **Settings → Pages → Build and deployment → Source: Deploy from a branch.**
+3. Set the branch to **`main`** and the folder to **`/ (root)`**, then Save.
 
-It then goes live at `https://<user>.github.io/<repo>/`.
+It goes live at `https://<user>.github.io/<repo>/` a minute or so later.
 
 Nothing in the site needs to change for this. Every asset path is relative and
 routing is hash-based (`#/overview`), so the site works unmodified whether it is
@@ -79,19 +75,22 @@ project knowledge base that cites its sources and says when it doesn't know.
 
 ## File structure
 
+The site sits at the repo root, alongside the project files it documents:
+
 ```
-site/
-├── index.html                  page shell, nav, search, chat panel
-├── README.md                   this file
-└── assets/
-    ├── css/
-    │   └── main.css            dark/light themes and all components
-    └── js/
-        ├── data.js             structured project data — EDIT THIS FIRST
-        ├── content.js          page prose, SVG diagrams, code samples
-        ├── interactive.js      the ten canvas/DOM widgets
-        ├── chatbot.js          assistant knowledge base and retrieval
-        └── app.js              router, search, TOC, glossary, rendering
+index.html                      page shell, nav, search, chat panel
+SITE_README.md                  this file
+.nojekyll                       stops Pages running the files through Jekyll
+assets/
+├── css/
+│   └── main.css                dark/light themes and all components
+├── js/
+│   ├── data.js                 structured project data — EDIT THIS FIRST
+│   ├── content.js              page prose, SVG diagrams, code samples
+│   ├── interactive.js          the ten canvas/DOM widgets
+│   ├── chatbot.js              assistant knowledge base and retrieval
+│   └── app.js                  router, search, TOC, glossary, rendering
+└── *.svg                       standalone project diagrams (pre-existing)
 ```
 
 ### Where to make changes
