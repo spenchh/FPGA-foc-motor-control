@@ -1108,3 +1108,187 @@ WIDGETS.piloop = function (host) {
   document.addEventListener('themechange', draw);
   requestAnimationFrame(draw);
 };
+
+/* =========================================================================
+   10. Voltage-sense divider calculator
+   Mirrors the VSENSE chain read from the netlist:
+     Vbus -> 750k + 750k / 20k divider -> AMC1311 -> OPA4388 (unity) -> ADC
+   The resistor values are confirmed; the ADC full scale is not, which is
+   why the last stage is a question rather than a number.
+   ========================================================================= */
+WIDGETS.vdiv = function (host) {
+  const body = el('div', 'widget-body');
+  host.append(body);
+
+  const st = { vbus: 96, rtop: 1500, rbot: 20, amcMax: 2.0 };
+
+  const ctrls = el('div', 'controls');
+  body.append(ctrls);
+  slider(ctrls, { id: 'vd-vbus', label: 'bus voltage', min: 0, max: 200, step: 1, value: st.vbus,
+    fmt: v => v + ' V', on: v => { st.vbus = v; draw(); } });
+  slider(ctrls, { id: 'vd-rtop', label: 'R top', min: 100, max: 2000, step: 10, value: st.rtop,
+    fmt: v => v + ' kOhm', on: v => { st.rtop = v; draw(); } });
+  slider(ctrls, { id: 'vd-rbot', label: 'R bottom', min: 1, max: 100, step: 1, value: st.rbot,
+    fmt: v => v + ' kOhm', on: v => { st.rbot = v; draw(); } });
+
+  readouts(body, [
+    { k: 'divider ratio', id: 'vd-ratio' },
+    { k: 'AMC1311 input', id: 'vd-vin' },
+    { k: 'within 0-2 V?', id: 'vd-ok' },
+    { k: 'max safe bus', id: 'vd-max' },
+  ]);
+
+  const note = el('div', 'widget-note');
+  body.append(note);
+
+  function draw() {
+    const ratio = st.rbot / (st.rtop + st.rbot);
+    const vin = st.vbus * ratio;
+    const maxBus = st.amcMax / ratio;
+    setRO('vd-ratio', '1 : ' + (1 / ratio).toFixed(1));
+    setRO('vd-vin', vin.toFixed(3) + ' V');
+    setRO('vd-ok', vin <= st.amcMax ? 'yes' : 'NO - clipping', vin <= st.amcMax ? 'ok' : 'warn');
+    setRO('vd-max', maxBus.toFixed(0) + ' V');
+
+    const isBoard = st.rtop === 1500 && st.rbot === 20;
+    note.innerHTML =
+      '<p><strong>Board values</strong> are 750 k&#8486; + 750 k&#8486; on top and 20 k&#8486; to PGND, so R top = 1500 k&#8486; ' +
+      '&mdash; a ratio of 1:76. ' + (isBoard ? 'You are looking at the board values now.' : 'You have moved these away from the board values.') + '</p>' +
+      '<p>At 96 V that gives about <strong>1.26 V</strong> into the AMC1311, comfortably inside its 0&ndash;2 V range. ' +
+      'A schematic note reads <em>"96V to 1V65"</em>, which does <strong>not</strong> match 96 / 76 &asymp; 1.26 V. ' +
+      'That discrepancy is an open question for the PCB team.</p>' +
+      '<p><strong>What this cannot tell you:</strong> the voltage that actually reaches the ADC. The OPA4388 stage is ' +
+      'unity gain, but the ADC full scale is unknown, so the limits in <code>voltage_sense_monitor.v</code> still ' +
+      'cannot be converted into volts.</p>';
+  }
+  draw();
+};
+
+/* =========================================================================
+   11. PS / PL split
+   Clickable rather than a static picture: the rule that decides which side
+   a job belongs on is "does a late answer break something?", so each item
+   states its own reason.
+   ========================================================================= */
+WIDGETS.pspl = function (host) {
+  const body = el('div', 'widget-body');
+  host.append(body);
+
+  const ITEMS = [
+    { t: 'PWM timing and HI/LO generation', side: 'pl', why: 'A PWM edge 50 us late produces the wrong motor voltage. It has to land on an exact clock cycle.', file: 'pwm_3phase_center_aligned.v' },
+    { t: 'Hall capture and sector decode', side: 'pl', why: 'Feeds commutation inside the control period, and needs two-stage synchronisation of asynchronous inputs.', file: 'hall_decoder.v' },
+    { t: 'Per-phase current limit', side: 'pl', why: 'All three phases compared at the same instant, with a shutdown path only a few cycles long.', file: 'phase_current_limit_monitor.v' },
+    { t: 'Measurement-health check', side: 'pl', why: 'Kirchhoff test on ia+ib+ic at the same sample instant.', file: 'phase_current_balance_monitor.v' },
+    { t: 'Voltage window check', side: 'pl', why: 'Bus and phase voltage compared against limits every sample.', file: 'voltage_sense_monitor.v' },
+    { t: 'Fast inhibit and DISABLE', side: 'pl', why: 'Must react without asking a processor, and latch until explicitly cleared.', file: 'pcb_disable_control.v' },
+    { t: 'Fixed-point FOC datapath', side: 'pl', why: 'Belongs in fabric eventually. Not written yet.', file: 'not written' },
+    { t: 'Startup mode and state machine', side: 'ps', why: 'Human-timescale sequencing. Milliseconds are fine.', file: '-' },
+    { t: 'Commands and setpoints', side: 'ps', why: 'Arrives from an operator or a host. Jitter here is harmless.', file: '-' },
+    { t: 'Thresholds into fabric registers', side: 'ps', why: 'Written once at configuration, then read by fabric every cycle.', file: 'AXI map not defined' },
+    { t: 'Logging, telemetry, comms', side: 'ps', why: 'A log line 50 ms late is still a fine log line.', file: '-' },
+    { t: 'Recovery policy after a trip', side: 'ps', why: 'Deliberately slow. A human or a supervisor decides when a latch clears.', file: '-' },
+  ];
+
+  const grid = el('div', 'pspl-grid');
+  const detail = el('div', 'widget-note');
+
+  ['pl', 'ps'].forEach(side => {
+    const col = el('div', 'pspl-col pspl-' + side);
+    col.append(el('h4', null, side === 'pl'
+      ? 'PL &mdash; programmable logic<small>inside the PWM period</small>'
+      : 'PS &mdash; ARM processing system<small>milliseconds, or human decisions</small>'));
+    ITEMS.filter(i => i.side === side).forEach(i => {
+      const b = el('button', 'pspl-item');
+      b.type = 'button';
+      b.textContent = i.t;
+      b.addEventListener('click', () => {
+        grid.querySelectorAll('.pspl-item').forEach(x => x.classList.remove('sel'));
+        b.classList.add('sel');
+        detail.innerHTML = '<p><strong>' + i.t + '</strong> &rarr; ' + side.toUpperCase() + '</p>' +
+          '<p>' + i.why + '</p><p class="pspl-file">RTL: <code>' + i.file + '</code></p>';
+      });
+      col.append(b);
+    });
+    grid.append(col);
+  });
+  body.append(grid);
+
+  detail.innerHTML = '<p>Click any item to see why it sits on that side.</p>' +
+    '<p>The test is always the same: <strong>does a late answer break something?</strong> If yes, it belongs in fabric.</p>';
+  body.append(detail);
+
+  const warn = el('div', 'widget-note');
+  warn.innerHTML = '<p><strong>Not yet defined:</strong> the AXI register map carrying setpoints, thresholds and ' +
+    'telemetry between the two sides. It should be written after the pin map and the ADC route are known, because ' +
+    'both change what fabric needs to expose.</p>';
+  body.append(warn);
+};
+
+/* =========================================================================
+   12. Vivado flow checklist
+   Ordered so everything doable today comes before everything blocked on
+   someone else. Progress is kept in localStorage only.
+   ========================================================================= */
+WIDGETS.vivadoflow = function (host) {
+  const body = el('div', 'widget-body');
+  host.append(body);
+
+  const STEPS = [
+    { t: 'Install Vivado and the Digilent Arty Z7 board files', s: 'ready' },
+    { t: 'Create a project and add fpga/rtl/*.v as design sources', s: 'ready' },
+    { t: 'Add fpga/tb/tb_*.v as simulation sources', s: 'ready' },
+    { t: 'Run behavioural simulation on each of the six testbenches', s: 'ready' },
+    { t: 'Record what actually happened, including any failures', s: 'ready' },
+    { t: 'Build a throwaway LED blink project to learn the XDC workflow', s: 'ready' },
+    { t: 'Read the fabric clock and I/O bank voltage off that project', s: 'ready' },
+    { t: 'Write the top-level wrapper tying the six modules together', s: 'ready' },
+    { t: 'Confirm the Arty Z7 variant (Z7-10 or Z7-20)', s: 'blocked' },
+    { t: 'Get board-side net-to-header mapping confirmed by the PCB team', s: 'blocked' },
+    { t: 'Resolve the Hall 5 V pull-up question', s: 'blocked' },
+    { t: 'Settle the ADC route (XADC, external, or PS-side)', s: 'blocked' },
+    { t: 'Define the AXI register map', s: 'blocked' },
+    { t: 'Write the final XDC', s: 'blocked' },
+    { t: 'Synthesis, implementation, bitstream', s: 'blocked' },
+  ];
+
+  const KEY = 'surg-vivado-flow';
+  let done = {};
+  try { done = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) { done = {}; }
+
+  const list = el('div', 'flow-list');
+  const summary = el('div', 'widget-note');
+
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(done)); } catch (e) { /* private mode */ }
+  }
+
+  function refresh() {
+    const readyTotal = STEPS.filter(s => s.s === 'ready').length;
+    const readyDone = STEPS.filter(s => s.s === 'ready' && done[s.t]).length;
+    summary.innerHTML =
+      '<p><strong>' + readyDone + ' of ' + readyTotal + '</strong> unblocked steps ticked. The remaining ' +
+      (STEPS.length - readyTotal) + ' are waiting on information from outside the FPGA work, and are listed so the ' +
+      'order is visible rather than because they can be started.</p>' +
+      '<p>Nothing here has been run. Ticking a box records your own progress in this browser only.</p>';
+  }
+
+  STEPS.forEach((step, i) => {
+    const row = el('label', 'flow-row flow-' + step.s);
+    const cb = el('input');
+    cb.type = 'checkbox';
+    cb.checked = !!done[step.t];
+    cb.disabled = step.s === 'blocked';
+    cb.addEventListener('change', () => {
+      if (cb.checked) done[step.t] = true; else delete done[step.t];
+      save(); refresh();
+    });
+    const txt = el('span', 'flow-text', (i + 1 < 10 ? '0' : '') + (i + 1) + '. ' + step.t);
+    const tag = el('span', 'sbadge sbadge-' + (step.s === 'ready' ? 'confirmed' : 'open'),
+      step.s === 'ready' ? 'Ready' : 'Blocked');
+    row.append(cb, txt, tag);
+    list.append(row);
+  });
+
+  body.append(list, summary);
+  refresh();
+};

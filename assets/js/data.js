@@ -45,16 +45,17 @@ const NAV = [
   { id: 'overview',     num: '1',  title: 'Project Overview',      group: 'Start here',
     children: [
       { id: 'overview',        title: 'What this project is' },
-      { id: 'state',           title: 'Current state & my role' }
+      { id: 'state',           title: 'Current known info & my role' }
     ] },
   { id: 'architecture', num: '2',  title: 'System Architecture',   group: 'Start here' },
   { id: 'pcb',          num: '3',  title: 'PCB Interface',         group: 'Hardware',
     children: [
-      { id: 'pcb',        title: 'Signal map & headers' },
+      { id: 'pcb',        title: 'Headers & board interface' },
       { id: 'pcb-chips',  title: 'Chip roles & signal paths' },
       { id: 'pcb-flags',  title: 'Netlist red flags' }
     ] },
-  { id: 'fpga',         num: '4',  title: 'FPGA / RTL',            group: 'Hardware',
+  { id: 'signals',      num: '4',  title: 'Signal Map',            group: 'Hardware' },
+  { id: 'fpga',         num: '5',  title: 'FPGA / RTL',            group: 'Hardware',
     children: [
       { id: 'fpga',        title: 'Module reference' },
       { id: 'fpga-pwm',    title: 'PWM generator (interactive)' },
@@ -62,20 +63,20 @@ const NAV = [
       { id: 'fpga-safety', title: 'Monitors & DISABLE' },
       { id: 'fpga-tb',     title: 'Testbenches' }
     ] },
-  { id: 'matlab',       num: '5',  title: 'MATLAB / FOC Math',     group: 'Control',
+  { id: 'matlab',       num: '6',  title: 'MATLAB / FOC Math',     group: 'Control',
     children: [
       { id: 'matlab',        title: 'Scripts & what they do' },
       { id: 'matlab-fixed',  title: 'Fixed point & Q-format' },
       { id: 'matlab-clarke', title: 'Clarke / Park / inverse Park' },
       { id: 'matlab-pi',     title: 'PI loop & duty generation' }
     ] },
-  { id: 'foc',          num: '6',  title: 'FOC Strategy',          group: 'Control' },
-  { id: 'vivado',       num: '7',  title: 'Vivado Starter Guide',  group: 'Toolchain' },
-  { id: 'tools',        num: '8',  title: 'Software & Tools',      group: 'Toolchain' },
-  { id: 'questions',    num: '9',  title: 'Open Questions',        group: 'Tracking' },
-  { id: 'timeline',     num: '10', title: 'Timeline & Progress',   group: 'Tracking' },
-  { id: 'links',        num: '11', title: 'Resource Library',      group: 'Reference' },
-  { id: 'glossary',     num: '12', title: 'Glossary',              group: 'Reference' }
+  { id: 'foc',          num: '7',  title: 'FOC Strategy',          group: 'Control' },
+  { id: 'vivado',       num: '8',  title: 'Vivado Starter Guide',  group: 'Toolchain' },
+  { id: 'tools',        num: '9',  title: 'Software & Tools',      group: 'Toolchain' },
+  { id: 'questions',    num: '10',  title: 'Open Questions',        group: 'Tracking' },
+  { id: 'timeline',     num: '11', title: 'Timeline & Progress',   group: 'Tracking' },
+  { id: 'links',        num: '12', title: 'Resource Library',      group: 'Reference' },
+  { id: 'glossary',     num: '13', title: 'Glossary',              group: 'Reference' }
 ];
 
 /* ------------------------------------------------------- controller signals */

@@ -57,19 +57,20 @@ rules for deep links.
 |---|---|
 | **1 · Project Overview** | What the project is, why an FPGA, my role, current state, what's unknown |
 | **2 · System Architecture** | Battery → power board → driver board → Arty Z7 → motor, the PS/PL split, tool flow |
-| **3 · PCB Interface** | Full signal map from the parsed netlist, chip roles, four signal paths, six netlist red flags |
-| **4 · FPGA / RTL** | Every module and testbench, port tables, interactive PWM / Hall / DISABLE / current models |
-| **5 · MATLAB / FOC Math** | Fixed point and Q-format, Clarke / Park / inverse Park, PI loop, duty generation |
-| **6 · FOC Strategy** | Six-step vs Hall-assisted vs encoder vs sensorless, and why Hall-assisted is the near-term path |
-| **7 · Vivado Starter Guide** | Project setup, first simulation, XDC explanation, what's missing before a bitstream |
-| **8 · Software & Tools** | MATLAB, Simulink, HDL Coder, Vivado, Verilog, Zynq, Arty Z7, Altium, Git, SimpleFOC, TI parts |
-| **9 · Open Questions** | 16 tracked items with owner, severity, what each blocks, and a ready-to-send question |
-| **10 · Timeline** | What happened in order, including the three assumptions that turned out wrong |
-| **11 · Resource Library** | 129 categorised links, official docs preferred, videos marked |
-| **12 · Glossary** | 25 terms, also available as hover popovers throughout the site |
+| **3 · PCB Interface** | Headers and board interface, chip roles, four signal paths, six netlist red flags |
+| **4 · Signal Map** | All 17 nets crossing the connector, filterable by direction and type, plus the divider calculator |
+| **5 · FPGA / RTL** | Every module and testbench, port tables, interactive PWM / Hall / DISABLE / current models |
+| **6 · MATLAB / FOC Math** | Fixed point and Q-format, Clarke / Park / inverse Park, PI loop, duty generation |
+| **7 · FOC Strategy** | Six-step vs Hall-assisted vs encoder vs sensorless, and why Hall-assisted is the near-term path |
+| **8 · Vivado Starter Guide** | Interactive flow checklist, project setup, XDC explanation, what's missing before a bitstream |
+| **9 · Software & Tools** | MATLAB, Simulink, HDL Coder, Vivado, Verilog, Zynq, Arty Z7, Altium, Git, SimpleFOC, TI parts |
+| **10 · Open Questions** | 16 tracked items with owner, severity, what each blocks, and a ready-to-send question |
+| **11 · Timeline** | What happened in order, including the three assumptions that turned out wrong |
+| **12 · Resource Library** | 129 categorised links, official docs preferred, videos marked |
+| **13 · Glossary** | 25 terms, also available as hover popovers throughout the site |
 
-Plus a **project assistant** (bottom-right button) — a retrieval bot over the
-project knowledge base that cites its sources and says when it doesn't know.
+Plus a **project assistant** (bottom-right button) that retrieves from the project
+files, quotes them with file and line, and says plainly when it does not know.
 
 ---
 
@@ -86,12 +87,74 @@ assets/
 │   └── main.css                dark/light themes and all components
 ├── js/
 │   ├── data.js                 structured project data — EDIT THIS FIRST
+│   ├── kb.js                   GENERATED retrieval corpus — do not hand-edit
 │   ├── content.js              page prose, SVG diagrams, code samples
-│   ├── interactive.js          the ten canvas/DOM widgets
-│   ├── chatbot.js              assistant knowledge base and retrieval
+│   ├── interactive.js          the thirteen canvas/DOM widgets
+│   ├── retrieval.js            BM25 search, intent detection, ranking
+│   ├── facts.js                curated direct answers + accuracy guards
+│   ├── chatbot.js              answer composition and the chat panel
 │   └── app.js                  router, search, TOC, glossary, rendering
 └── *.svg                       standalone project diagrams (pre-existing)
+tools/
+├── build-kb.mjs                regenerates assets/js/kb.js from project files
+└── test-assistant.mjs          regression suite for the assistant
 ```
+
+Scripts load in dependency order in `index.html`: `data` → `kb` → `content` →
+`interactive` → `retrieval` → `facts` → `chatbot` → `app`. They share one global
+scope, so **a top-level name declared twice breaks every script after it**. If the
+page goes blank, check the browser console for `already been declared` first.
+
+---
+
+## How the assistant works
+
+There is no model and no network call. The assistant is retrieval plus templated
+composition, which means it cannot write new prose — and equally cannot invent a
+test result. Everything it shows is either a curated sentence or a quotation from
+a project file.
+
+**Three layers:**
+
+1. **`kb.js`** — 372 chunks generated from the real project files. Markdown is cut
+   at heading boundaries, Verilog at module/port/`always`-block boundaries, MATLAB
+   at `%%` cells or `cfg.<group>` runs. Every chunk carries its source file, heading,
+   line range, topics, confirmed/inferred/open status, source tier and last-updated date.
+2. **`retrieval.js`** — BM25 with heading terms weighted 3×, plus phrase matching on
+   multi-word project terms. Ranking is tiered exactly as the project requires:
+   project files, then datasheets, then official docs, then application notes, with
+   video last and treated as a learning aid. Superseded notes are pushed far down.
+   It also extracts the individual *sentences* that answer the question.
+3. **`facts.js`** — curated direct answers. Each has a `short` (the one-line answer,
+   always shown first) and a longer `a` (collapsed under "Full detail"). Entries with
+   a `must` pattern win outright — that is how the accuracy rules are enforced, so
+   "has anything been simulated" can never be answered by a passage that merely
+   discusses simulation.
+
+**Every answer has the same shape:** direct answer → Confirmed/Inferred/Open counts
+→ quoted evidence with file and line → full detail (collapsed) → sources used
+(collapsed, split into project files vs general background) → follow-up questions.
+
+### Rebuilding the knowledge base
+
+`kb.js` is generated. After editing any project note, RTL file or MATLAB script:
+
+```bash
+node tools/build-kb.mjs      # regenerate assets/js/kb.js
+node tools/test-assistant.mjs # 23 answer cases + corpus sanity checks
+```
+
+Add a new source file to the `MD_FILES`, `RTL_FILES`, `TB_FILES` or `M_FILES` lists
+at the top of `build-kb.mjs`, and give it a site page in `PAGE_FOR`. Notes describing
+an older board revision belong in `SUPERSEDED` so they stay searchable for "what
+changed" without polluting "what is".
+
+### Changing what the assistant says
+
+- **A wrong or missing direct answer** → edit the `short` field in `facts.js`.
+- **An answer that must never drift** → give the entry a `must` pattern.
+- **A fact the assistant cannot find** → it is a gap in the project files, not in the
+  code. Write it in the source note and rebuild.
 
 ### Where to make changes
 
@@ -193,3 +256,70 @@ Skip link, keyboard-navigable search (`/` to focus, arrows to move, Enter to
 open), ARIA labelling on controls, visible focus rings, and `role="img"` with
 descriptive labels on every diagram. Glossary popovers open on focus as well as
 hover.
+
+---
+
+## What changed in this revision
+
+**The assistant was rebuilt.** It previously stored 33 hand-written topic essays
+and printed whichever one matched best, in full. There was no unit of information
+smaller than a topic, so "Is DISABLE active high?" and "Explain the DISABLE line"
+returned the identical block of text. That is what made it feel generic. It now
+retrieves from the project files and leads with the specific answer.
+
+- Added `tools/build-kb.mjs`, `assets/js/kb.js` (372 chunks), `assets/js/retrieval.js`,
+  `assets/js/facts.js`, and `tools/test-assistant.mjs`
+- Answers now cite the exact file and line, and split Confirmed / Inferred / Open
+- Six answer modes: Quick, Explain like I'm new, FPGA implementation, PCB cross-check,
+  MATLAB/FOC math, Meeting update
+- Per-answer confidence, a "Sources used" disclosure separating project files from
+  general background, copy-answer, and page-aware follow-up questions
+- An honest fallback when nothing relevant is found
+
+**New page:** Signal Map (`#/signals`) — all 17 nets, filterable by direction and type.
+
+**New interactive models:** voltage-divider calculator, clickable PS/PL partition,
+and a Vivado flow checklist that separates unblocked steps from blocked ones.
+
+**UI:** quick-navigator cards on the overview, `Needs PCB team` / `Ready for simulation`
+/ `Inferred` badges, and `updated <date>` tags on dated claims.
+
+### Bugs found and fixed while building this
+
+- `"simulated"` stemmed to `simulat` but `"simulation"` did not, so the note recording
+  that nothing has ever been run was unreachable by the obvious question
+- Confidence reported 100% on a score of 4.2 with one term matched; it now weights how
+  much of the question the winning chunk actually covers
+- An off-topic question ("airspeed velocity of an unladen swallow") returned a MathWorks
+  note about velocity control instead of declining
+- `content.js` already declared `esc`; `chatbot.js` declaring it as a function was a
+  `SyntaxError` that silently broke every script loaded after it
+- The old `site/README.md` said to point GitHub Pages at the `/site` folder. Pages only
+  serves from `/` or `/docs`, so that instruction could never have worked
+
+---
+
+## Limitations — read before trusting this
+
+**The assistant does not generate text.** No model, no API key, no network call. It
+retrieves and quotes. Ask it something the project files do not cover and it will say
+so rather than reason its way to an answer. Making it genuinely generative needs a
+serverless function holding an API key, at which point the site is no longer static.
+
+**Retrieval is lexical, not semantic.** BM25 plus phrase matching and a synonym table.
+A question phrased with vocabulary that appears nowhere in the project files may miss
+even when the answer is present. Adding a term to `ALIAS` in `retrieval.js` is the fix.
+
+**Chunk status is inferred, not authored.** Confirmed / Inferred / Open is derived from
+heading wording and inline markers such as `TODO` and `NaN`. It is usually right and
+occasionally coarse. The badges on the written pages are hand-authored and more reliable.
+
+**Altium files are not parsed by this site.** The board facts come from
+`PCB_CROSSCHECK_2026-08-05.md`, which records an earlier netlist extraction. Treat that
+as a text extraction, never as visual DRC, layout or symbol verification — the suspected
+OPA4388 pin-mapping problem is exactly the kind of defect a netlist read cannot settle.
+
+**Nothing has been simulated or tested.** Six RTL modules and six testbenches exist and
+no simulator has executed them. The PCB has not been fabricated. Every interactive model
+on the site is a JavaScript reimplementation of described behaviour, written to explain
+the intent — not simulator output, and not evidence that the RTL does this.

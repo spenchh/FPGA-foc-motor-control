@@ -28,8 +28,20 @@ function cite(...keys) {
 }
 
 function badge(kind) {
-  const map = { confirmed: 'Confirmed', assumption: 'Assumption', open: 'Open', danger: 'Blocker', neutral: 'Note' };
+  const map = {
+    confirmed: 'Confirmed', assumption: 'Assumption', open: 'Open',
+    danger: 'Blocker', neutral: 'Note',
+    inferred: 'Inferred',
+    pcbteam: 'Needs PCB team',      // blocked on someone outside the FPGA work
+    ready: 'Ready for simulation',  // doable today, blocked by nothing
+  };
   return `<span class="badge badge-${kind}">${map[kind] || kind}</span>`;
+}
+
+/* A dated fact is a different thing from an undated one, so key claims carry
+   the date the underlying note was written. */
+function updated(date) {
+  return `<span class="updated-tag" title="Date of the project note this is read from">updated ${date}</span>`;
 }
 
 function callout(kind, title, body) {
@@ -507,6 +519,36 @@ PAGES.overview = {
   title: 'Project Overview',
   lede: 'A motor controller where the fast control loop lives in FPGA fabric instead of in software. This page is the fastest way to understand what exists, what is proven, and what is still unknown.',
   html: `
+<div class="quicknav">
+  <a class="qn-card" href="#/state">
+    <span class="qn-k">Start here</span><span class="qn-t">I'm new</span>
+    <span class="qn-d">What exists, what is proven, and what is still unknown — in one page.</span></a>
+  <a class="qn-card" href="#/signals">
+    <span class="qn-k">Hardware</span><span class="qn-t">Signal map</span>
+    <span class="qn-d">All 17 nets crossing the connector, filterable by direction and type.</span></a>
+  <a class="qn-card" href="#/pcb">
+    <span class="qn-k">Hardware</span><span class="qn-t">PCB interface</span>
+    <span class="qn-d">Gate drivers, current and voltage sense chains, netlist red flags.</span></a>
+  <a class="qn-card" href="#/fpga">
+    <span class="qn-k">Hardware</span><span class="qn-t">FPGA / RTL</span>
+    <span class="qn-d">Six modules and six testbenches, with interactive waveform models.</span></a>
+  <a class="qn-card" href="#/matlab">
+    <span class="qn-k">Control</span><span class="qn-t">MATLAB / FOC math</span>
+    <span class="qn-d">Fixed point, Clarke and Park, the PI loop, duty generation.</span></a>
+  <a class="qn-card" href="#/vivado">
+    <span class="qn-k">Toolchain</span><span class="qn-t">Vivado</span>
+    <span class="qn-d">Which files to add, and exactly what is missing before a bitstream.</span></a>
+  <a class="qn-card" href="#/foc">
+    <span class="qn-k">Control</span><span class="qn-t">FOC strategy</span>
+    <span class="qn-d">Hall-assisted now, sensorless as future research — and why.</span></a>
+  <a class="qn-card" href="#/questions">
+    <span class="qn-k">Tracking</span><span class="qn-t">Open blockers</span>
+    <span class="qn-d">Every unresolved item, ranked by what it stops you doing.</span></a>
+  <a class="qn-card" href="#/links">
+    <span class="qn-k">Reference</span><span class="qn-t">Links</span>
+    <span class="qn-d">Datasheets, official docs and tutorials, grouped by topic.</span></a>
+</div>
+
 <h2 id="what">What this project is</h2>
 <p>SURG 2026 is a research project on the cost and energy efficiency of FPGA-based ${g('FOC')} for lightweight motors — Spencer Kogoma. The deliverable is a working three-phase motor controller split across two pieces of hardware:</p>
 <ul>
@@ -632,6 +674,9 @@ ${cite('crosscheck')}
 <h2 id="pspl">The PS / PL split</h2>
 <p>A ${g('PS')} is a hardened ARM processor. A ${g('PL')} is FPGA fabric. On a Zynq they sit on the same die and talk over ${g('AXI')}. Deciding what goes where is the main architectural choice in this project, and there is a simple test for it.</p>
 ${figure('Figure 3', 'Which side owns what, and the question that decides it.', SVG_PSPL)}
+
+${widget('pspl', 'PS / PL partition — click any item',
+  'Generated explanatory model. The partition reflects the split described in the project notes; the AXI register map that would connect the two sides is not yet defined.')}
 
 <h3 id="pl-side">PL — the fabric side</h3>
 <ul>
@@ -1617,6 +1662,10 @@ ${callout('confirmed', 'Enough exists to start simulating. Not enough exists for
   `<p>These are two different thresholds and it is worth being precise about the gap between them. Simulation needs only RTL and testbenches, both of which exist. A bitstream needs pin constraints, which need a confirmed board mapping, which does not exist yet.</p>`)}
 ${cite('known')}
 
+<h2 id="flow">The whole flow, in order ${badge('ready')}</h2>
+${widget('vivadoflow', 'Vivado flow checklist',
+  'Generated explanatory model. Ticks are stored in your browser only and record intent, not results — no step here has been executed.')}
+
 <h2 id="install">Step 1 — Install</h2>
 <ul>
   <li>Vivado (the free WebPACK edition covers the Zynq-7000 devices on an Arty Z7).</li>
@@ -1898,6 +1947,51 @@ ${callout('info', 'Source hierarchy used throughout this site',
 };
 
 /* -------------------------------------------------------- 12. GLOSSARY */
+/* -------------------------------------------------------- 4. SIGNAL MAP */
+PAGES.signals = {
+  title: 'Signal Map',
+  lede: 'Every net that crosses between the driver board and the controller, in one filterable table. Header positions are read from the parsed netlist; the Arduino pin names are inferred from the standard Uno layout and are not yet confirmed.',
+  html: `
+<h2 id="counts">What crosses the connector</h2>
+<p class="meta-line">${badge('confirmed')} Header positions read from the parsed netlist ${updated('2026-08-05')}</p>
+<p>Seventeen nets in total: <strong>seven digital outputs</strong> (six PWM plus DISABLE),
+<strong>three digital inputs</strong> (Hall A/B/C), <strong>six analog inputs</strong>
+(three current, two voltage, one thermistor), and one spare pair.</p>
+<p>The distinction that matters for RTL: the controller emits <em>three</em> duty commands, and the
+FPGA expands each into a physical HI/LO pair. Six pins, three commands — see
+<a href="#/fpga-pwm">the PWM generator</a>.</p>
+${cite('crosscheck', 'known')}
+
+<h2 id="map">Full signal map</h2>
+<div id="signal-map"></div>
+
+<h2 id="unrouted">Unrouted and unconnected positions</h2>
+<div id="signal-unrouted"></div>
+
+<h2 id="vdiv">Voltage sense scaling</h2>
+${widget('vdiv', 'Voltage divider calculator',
+  'Generated explanatory model. Resistor values are read from the netlist; the ADC full scale is unknown, so the last stage of the chain cannot be computed.')}
+
+<h2 id="levels">Voltage levels ${badge('open')} ${badge('pcbteam')}</h2>
+<p>Two level questions are unresolved and both block connecting hardware:</p>
+<ul>
+  <li>The three <strong>Hall inputs</strong> carry 10 kΩ pull-ups to <strong>5 V</strong>. Zynq I/O banks are
+  not 5 V tolerant, and the 100 Ω series resistor is not adequate protection on its own.
+  Until the pull-ups move to <code>3V3</code>, do not connect these lines.</li>
+  <li>The <strong>shield header I/O bank voltage</strong> is unconfirmed, which sets the
+  <code>IOSTANDARD</code> in the XDC. This one can be answered without anyone else — build a throwaway
+  LED blink project and check.</li>
+</ul>
+${cite('crosscheck', 'arty_rm')}
+
+<h2 id="analog">Where the analog signals go ${badge('open')} ${badge('pcbteam')}</h2>
+<p>All six analog channels terminate on J3. Whether they reach the XADC, an external ADC, or a
+PS-side path is <strong>not established by the board files</strong> — an Arty Z7 having six
+single-ended XADC inputs is suggestive, not confirmation. This blocks the current-loop timing
+budget and every analog scaling constant.</p>
+${cite('crosscheck', 'xadc')}`
+};
+
 PAGES.glossary = {
   title: 'Glossary',
   lede: 'Terms used across this site. Any underlined term in the body text shows its definition on hover.',

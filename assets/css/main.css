@@ -255,6 +255,13 @@ code {
 .badge-open       { background: var(--open-bg);       color: var(--open);       border-color: color-mix(in srgb, var(--open) 35%, transparent); }
 .badge-danger     { background: var(--danger-bg);     color: var(--danger);     border-color: color-mix(in srgb, var(--danger) 35%, transparent); }
 .badge-neutral    { background: var(--bg-elev-2);     color: var(--text-dim);   border-color: var(--border); }
+.badge-inferred   { background: var(--assumption-bg); color: var(--assumption); border-color: color-mix(in srgb, var(--assumption) 35%, transparent); }
+.badge-pcbteam    { background: var(--danger-bg);     color: var(--danger);     border-color: color-mix(in srgb, var(--danger) 35%, transparent); }
+.badge-ready      { background: var(--confirmed-bg);  color: var(--confirmed);  border-color: color-mix(in srgb, var(--confirmed) 35%, transparent); }
+.updated-tag {
+  display: inline-block; font-size: 10px; color: var(--text-faint);
+  font-family: var(--mono); margin-left: 6px; white-space: nowrap;
+}
 
 /* ---------------------------------------------------------------- callout */
 .callout {
@@ -464,6 +471,55 @@ html[data-theme="light"] .tok-dir { color: #953800; }
 .msg-cite a { display: block; }
 .chat-suggestions { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 12px 10px; }
 .chat-suggestions .chip { font-size: 11px; padding: 4px 9px; }
+
+/* --------------------------------------------------- quick navigator cards */
+.quicknav { display: grid; grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); gap: 10px; margin: 18px 0 24px; }
+.qn-card {
+  display: block; padding: 13px 14px; border-radius: 9px; text-decoration: none;
+  background: var(--bg-elev); border: 1px solid var(--border);
+  transition: border-color .12s, transform .12s;
+}
+.qn-card:hover { border-color: var(--accent-line); transform: translateY(-1px); }
+.qn-card .qn-k { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: .07em; color: var(--text-faint); margin-bottom: 4px; }
+.qn-card .qn-t { display: block; font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 3px; }
+.qn-card .qn-d { display: block; font-size: 11.5px; color: var(--text-dim); line-height: 1.45; }
+
+/* --------------------------------------------------------- PS / PL widget */
+.pspl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.pspl-col { border: 1px solid var(--border); border-radius: 8px; padding: 10px; background: var(--bg-elev); }
+.pspl-col h4 { margin: 0 0 8px; font-size: 12px; }
+.pspl-col h4 small { display: block; font-weight: 400; font-size: 10.5px; color: var(--text-faint); margin-top: 2px; }
+.pspl-pl { border-left: 2px solid var(--accent-line); }
+.pspl-ps { border-left: 2px solid #2f9e6b; }
+.pspl-item {
+  display: block; width: 100%; text-align: left; margin-bottom: 4px; padding: 6px 8px;
+  font-size: 11.5px; font-family: inherit; color: var(--text-dim); cursor: pointer;
+  background: var(--bg-inset); border: 1px solid transparent; border-radius: 5px;
+}
+.pspl-item:hover { color: var(--text); border-color: var(--border); }
+.pspl-item.sel { background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent); font-weight: 600; }
+.pspl-file { font-size: 10.5px; color: var(--text-faint); margin-top: 4px; }
+@media (max-width: 620px) { .pspl-grid { grid-template-columns: 1fr; } }
+
+/* ------------------------------------------------------ flow checklist */
+.flow-list { display: flex; flex-direction: column; gap: 2px; }
+.flow-row {
+  display: flex; align-items: center; gap: 9px; padding: 6px 8px; border-radius: 5px;
+  font-size: 12.5px; cursor: pointer;
+}
+.flow-row:hover { background: var(--bg-inset); }
+.flow-row input { flex: none; }
+.flow-text { flex: 1; }
+.flow-blocked { opacity: .62; cursor: default; }
+.flow-blocked .flow-text { color: var(--text-faint); }
+
+/* ------------------------------------------------------------ signal map */
+.filter-bar { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.dir-out { color: var(--accent); white-space: nowrap; }
+.dir-in { color: #2f9e6b; white-space: nowrap; }
+.dir-spare { color: var(--text-faint); white-space: nowrap; }
+.plain-list { margin: 0 0 12px; padding-left: 18px; }
+.plain-list li { margin-bottom: 5px; }
 
 /* ------------------------------------------------------- assistant answer */
 /* An answer is a fixed sequence: lead, status chips, quoted evidence, then
@@ -678,3 +734,5 @@ html[data-theme="light"] .tok-dir { color: #953800; }
   details.collapse > .collapse-body { display: block !important; }
   body { background: #fff; color: #000; }
 }
+
+.meta-line { font-size: 12px; color: var(--text-dim); margin: -4px 0 12px; }
