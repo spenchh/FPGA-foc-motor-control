@@ -464,6 +464,87 @@ html[data-theme="light"] .tok-dir { color: #953800; }
 .msg-cite a { display: block; }
 .chat-suggestions { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 12px 10px; }
 .chat-suggestions .chip { font-size: 11px; padding: 4px 9px; }
+
+/* ------------------------------------------------------- assistant answer */
+/* An answer is a fixed sequence: lead, status chips, quoted evidence, then
+   collapsed detail and sources. The styling exists to keep that order
+   legible at a glance rather than to decorate it. */
+.chat-modes {
+  display: flex; flex-wrap: wrap; gap: 5px;
+  padding: 9px 12px; border-bottom: 1px solid var(--border); background: var(--bg-elev);
+}
+.chat-modes .chip { font-size: 10.5px; padding: 3px 8px; }
+
+.ans-lead { font-size: 13.5px; line-height: 1.55; }
+.ans-lead p { margin: 0 0 7px; }
+.ans-lead p:last-child { margin-bottom: 0; }
+.ans-lead strong { color: var(--text); }
+
+.ans-chips { display: flex; flex-wrap: wrap; gap: 5px; margin: 9px 0 2px; }
+.conf, .sbadge {
+  font-size: 10px; font-weight: 600; letter-spacing: .02em;
+  padding: 2px 7px; border-radius: 999px; border: 1px solid transparent; white-space: nowrap;
+}
+.conf-high { background: rgba(52,168,110,.14); color: #2f9e6b; border-color: rgba(52,168,110,.35); }
+.conf-medium { background: rgba(214,158,46,.14); color: #b8860b; border-color: rgba(214,158,46,.35); }
+.conf-low { background: rgba(220,90,70,.13); color: #c2543f; border-color: rgba(220,90,70,.32); }
+.conf-guard { background: var(--accent-soft); color: var(--accent); border-color: var(--accent-line); }
+.sbadge-confirmed { background: rgba(52,168,110,.12); color: #2f9e6b; }
+.sbadge-inferred { background: rgba(214,158,46,.12); color: #b8860b; }
+.sbadge-open { background: rgba(220,90,70,.12); color: #c2543f; }
+.sbadge-stale { background: var(--bg-inset); color: var(--text-faint); border-color: var(--border); }
+
+.ans-evidence { margin-top: 11px; }
+.ans-evidence > b, .ans-followups > b {
+  display: block; font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--text-faint); margin-bottom: 6px;
+}
+.ev {
+  margin: 0 0 8px; padding: 8px 10px; border-radius: 8px;
+  background: var(--bg-elev); border: 1px solid var(--border-soft); border-left: 2px solid var(--accent-line);
+}
+.ev figcaption {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 5px;
+  font-size: 10.5px; color: var(--text-faint); margin-bottom: 5px;
+}
+.ev figcaption a { font-family: var(--mono); font-size: 10.5px; }
+.ev figcaption em { font-style: normal; color: var(--text-dim); }
+.ev-date { margin-left: auto; opacity: .75; }
+.ev p, .ev li { font-size: 12px; line-height: 1.5; margin: 0 0 4px; }
+.ev ul { margin: 0; padding-left: 16px; }
+.ans-code {
+  margin: 0; padding: 7px 9px; border-radius: 6px; overflow-x: auto;
+  background: var(--bg-inset); font-size: 10.5px; line-height: 1.45;
+}
+
+.ans-more, .ans-src { margin-top: 9px; }
+.ans-more > summary, .ans-src > summary {
+  cursor: pointer; font-size: 11px; font-weight: 600; color: var(--text-dim);
+  padding: 5px 0; user-select: none;
+}
+.ans-more > summary:hover, .ans-src > summary:hover { color: var(--accent); }
+.ans-more[open] > summary, .ans-src[open] > summary { margin-bottom: 5px; }
+.ans-more p, .ans-more li { font-size: 12.5px; }
+.src-group { margin-bottom: 8px; }
+.src-group b { display: block; font-size: 10.5px; color: var(--text-faint); margin-bottom: 3px; }
+.src-group ul { margin: 0; padding-left: 15px; }
+.src-group li { font-size: 11px; margin-bottom: 2px; }
+.src-group .tier { color: var(--text-faint); font-size: 10px; }
+.src-note { font-size: 10.5px; color: var(--text-faint); margin: 6px 0 0; line-height: 1.45; }
+
+.ans-guard {
+  margin-top: 10px; padding: 7px 9px; border-radius: 6px; font-size: 11px; line-height: 1.5;
+  background: rgba(220,90,70,.08); border: 1px solid rgba(220,90,70,.22); color: var(--text-dim);
+}
+.ans-note { font-size: 11.5px; color: var(--text-dim); margin: 6px 0 0; line-height: 1.5; }
+.ans-actions { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+.ans-actions .chip { font-size: 10.5px; padding: 3px 8px; text-decoration: none; }
+.ans-followups { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 5px; }
+.ans-followups > b { width: 100%; }
+.ans-followups .chip { font-size: 10.5px; padding: 3px 8px; }
+
+/* The bot bubble holds a whole structured answer, so it needs the room. */
+.msg-bot { max-width: 100%; }
 .chat-input { display: flex; gap: 8px; padding: 11px 12px; border-top: 1px solid var(--border); }
 .chat-input input {
   flex: 1; background: var(--bg-inset); border: 1px solid var(--border); border-radius: 7px;

@@ -1,477 +1,243 @@
 /* ===========================================================================
-   SURG 2026 — project assistant
+   chatbot.js — the project assistant
 
-   A retrieval assistant over the project knowledge base. It runs entirely in
-   the browser with no external API and no network access. It matches a
-   question against curated entries and returns the entry with its sources.
+   Composition and UI. The pieces it sits on:
+     kb.js         generated chunks from the real project files
+     retrieval.js  BM25 + intent detection + sentence extraction
+     facts.js      curated direct answers with accuracy guards
 
-   Design rules it must obey:
-     - never claim simulation or hardware testing happened
-     - always cite the project file or datasheet an answer came from
-     - say plainly when something is unknown rather than guessing
+   The shape of every answer is deliberate and always the same:
+
+     1. the direct answer to the question that was asked
+     2. what is Confirmed / Inferred / Open about it
+     3. the evidence, quoted, with file and line
+     4. full detail, collapsed
+     5. sources used, collapsed, split into project files vs background
+     6. follow-up questions that lead somewhere real
+
+   It runs entirely in the browser. There is no model and no network call, so
+   it never generates prose: everything it shows is either a curated sentence
+   or a quotation from a project file. That is a limitation, and it is also
+   why it cannot hallucinate a test result.
    =========================================================================== */
 
-/* Each entry: k = trigger keywords, a = answer HTML, c = citations, p = page link */
-const KB = [
-  {
-    id: 'disable',
-    k: 'disable dis pin polarity active high low run kill gate driver inhibit safe floating pull-up',
-    a: `<p><code>DISABLE</code> is the single line that tells all three gate drivers to stop switching.</p>
-        <ul>
-          <li>It lands on <strong>J4.10</strong> and goes to the <code>DIS</code> pin (pin 5) of all three UCC21222 devices, plus test point TP5.</li>
-          <li>It is <strong>active high</strong>: drive it <strong>low to run</strong>, high to kill.</li>
-          <li>There is <strong>no pull resistor</strong> anywhere on the net. The UCC21222 pulls DIS high internally, so a floating pin — which is what you get from an unconfigured FPGA — leaves the drivers <strong>disabled</strong>. That is the safe direction, and it costs nothing.</li>
-        </ul>
-        <p>In RTL, <code>pcb_disable_control.v</code> owns it. Its <code>DISABLE_ACTIVE_LEVEL = 1'b1</code> default matches the hardware.</p>`,
-    c: [['PCB_CROSSCHECK_2026-08-05.md', '#/pcb-chips'], ['TI UCC21222 datasheet', 'https://www.ti.com/lit/ds/symlink/ucc21222.pdf'], ['fpga/rtl/pcb_disable_control.v', '#/fpga-safety']],
-    p: '#/fpga-safety'
-  },
-  {
-    id: 'xdc',
-    k: 'xdc constraints before need pin map package pin iostandard write constraint blocked bitstream',
-    a: `<p>Five things, and four of them are not mine to answer:</p>
-        <ol>
-          <li><strong>Board-side net-to-header mapping</strong> — confirmed by the PCB team, including connector orientation. The header positions are known from the netlist, but turning them into Arduino D/A names is currently an inference.</li>
-          <li><strong>Arty Z7 variant</strong> — Z7-10 or Z7-20. They differ in how many shield pins reach the PL.</li>
-          <li><strong>Hall 5 V pull-up resolution</strong> — this decides whether those three pins can be connected at all.</li>
-          <li><strong>ADC route</strong> — whether the analog pins need XADC constraints or nothing.</li>
-          <li><strong>Shield header I/O bank voltage</strong> — sets the <code>IOSTANDARD</code>.</li>
-        </ol>
-        <p>With those answered, writing the XDC is mechanical: combine the confirmed board mapping with the header-to-package-pin table in the Arty Z7 reference manual.</p>
-        <p>Item 5 can be answered without anyone else — build a throwaway LED blink project and check.</p>`,
-    c: [['FPGA_KNOWN_INFO_2026-08-05.md', '#/vivado'], ['Digilent Arty Z7 reference manual', 'https://digilent.com/reference/programmable-logic/arty-z7/reference-manual']],
-    p: '#/vivado'
-  },
-  {
-    id: 'current-path',
-    k: 'current sensing path csense shunt amc1300 opa4388 chain measure phase amps scaling gain',
-    a: `<p>The chain, in order:</p>
-        <p><code>shunt → AMC1300 → OPA4388 → MCU CSENSE A/B/C → J3.1/2/3</code></p>
-        <ul>
-          <li>The <strong>shunt is not on the driver board</strong>. The AMC1300 measures <code>PHASE x+</code> against <code>PHASE x−</code> through the H1/H2/H3 headers, which puts the shunt on the power board.</li>
-          <li><strong>AMC1300</strong> (U2/U4/U6) — isolated amplifier, fixed gain <strong>8.2</strong>, ±250 mV input range.</li>
-          <li><strong>OPA4388</strong> (U10) — four-resistor 3.3 kΩ differential stage at <strong>unity gain</strong>.</li>
-          <li>All <strong>three phases</strong> are measured. Phase-C reconstruction is demoted to a cross-check idea, not the main path.</li>
-        </ul>
-        <p>So <code>MCU CSENSE ≈ 8.2 × V_shunt</code>. Everything except the shunt value is known, which is why <code>cfg.current.sensitivity_V_per_A</code> is correctly left as <code>NaN</code>.</p>
-        <p><strong>Two open problems:</strong> the shunt value is unknown, and the diff stage references GND at unity gain — so negative current maps below 0 V and would clip. FOC needs bidirectional current, and nothing visible in the netlist provides an offset.</p>`,
-    c: [['PCB_CROSSCHECK_2026-08-05.md', '#/pcb-chips'], ['TI AMC1300 datasheet', 'https://www.ti.com/lit/ds/symlink/amc1300.pdf'], ['matlab/board_interface_config.m', '#/matlab']],
-    p: '#/pcb-chips'
-  },
-  {
-    id: 'sensorless',
-    k: 'sensorless foc hall assisted are we doing direction strategy near-term future observer back-emf',
-    a: `<p>No — not yet, and that is deliberate.</p>
-        <p>The near-term path is <strong>Hall-assisted FOC and board bring-up</strong>. Hall sensors are confirmed on the updated PCB (digital, on J5) and <code>hall_decoder.v</code> is written.</p>
-        <p><strong>Sensorless FOC is future research</strong>, not the immediate bring-up assumption. The reason is concrete: an observer is only as good as the measurements feeding it, and right now the current-sense sign convention, the shunt value, the ADC route and the voltage scaling are all open. A sensorless estimator built on an uncalibrated current path produces confident, wrong angles — a worse failure mode than a Hall sensor that simply stops reporting.</p>
-        <p>Hall also works from standstill, which sensorless does not, and it fails readably: codes 000 and 111 are illegal and already counted in RTL.</p>
-        <p>The sensible research framing is stage 6: add an observer later and compare it against the Halls while they are still connected as ground truth.</p>`,
-    c: [['FPGA_KNOWN_INFO_2026-08-05.md', '#/foc'], ['FPGA_TODO.md', '#/foc']],
-    p: '#/foc'
-  },
-  {
-    id: 'rtl-files',
-    k: 'rtl files need which modules verilog list source design what do i need',
-    a: `<p>Six RTL modules, all in <code>fpga/rtl/</code>:</p>
-        <ul>
-          <li><code>pwm_3phase_center_aligned.v</code> — three duties in, six HI/LO out, with a non-overlap window</li>
-          <li><code>hall_decoder.v</code> — three Hall inputs to a six-step sector, plus direction and error counts</li>
-          <li><code>pcb_disable_control.v</code> — owns the DISABLE line and the latching protection state</li>
-          <li><code>phase_current_balance_monitor.v</code> — checks ia + ib + ic (a measurement-health check)</li>
-          <li><code>phase_current_limit_monitor.v</code> — per-phase absolute overcurrent</li>
-          <li><code>voltage_sense_monitor.v</code> — window check on phase and bus voltage</li>
-        </ul>
-        <p>Six matching testbenches sit in <code>fpga/tb/</code>, one per module.</p>
-        <p><strong>Removed on purpose:</strong> <code>fault_manager.v</code> (depended on <code>nOC</code>/<code>FAULT</code>, which do not exist on this board) and the phase-C reconstruction module (all three phases are measured now).</p>
-        <p><strong>Still missing:</strong> a top-level wrapper, the AXI register interface, ADC interface logic, and the FOC datapath itself.</p>`,
-    c: [['FPGA_KNOWN_INFO_2026-08-05.md', '#/fpga'], ['README.md', '#/fpga']],
-    p: '#/fpga'
-  },
-  {
-    id: 'meeting',
-    k: 'meeting say update professor short summary status report advisor what should i say',
-    a: `<p>Something close to this:</p>
-        <p><em>"I cross-checked our FPGA and MATLAB work against the updated driver board by parsing the actual Altium netlist. Most of our assumptions held up: all three phase currents are measured, voltage sense mirrors current sense, and there's no dedicated fault line — protection is the driver chip plus our disable logic, and I confirmed disable is active-high and fails safe.</em></p>
-        <p><em>Two corrections: Hall sensors do come in digitally, so we're adding a small Hall decoder, and the board takes six PWM inputs, so our three-phase generator drives complementary pairs. I also flagged board-level issues to the PCB team — op-amp pin mapping and the isolated supply — before this goes to fab.</em></p>
-        <p><em>Next I need confirmed pin mapping, the ADC path, Hall voltage safety, current-sense offset and the dead-time policy before final XDC and full Vivado integration."</em></p>
-        <p>If asked what is <em>not</em> done: be straight about it. Nothing has been simulated and nothing has been tested on hardware.</p>`,
-    c: [['FPGA_KNOWN_INFO_2026-08-05.md', '#/state'], ['PCB_CROSSCHECK_2026-08-05.md', '#/state']],
-    p: '#/state'
-  },
-  {
-    id: 'pwm-count',
-    k: '6 six pwm lines three 3 duty how many outputs complementary hi lo why',
-    a: `<p>Both numbers are right, they just describe different layers.</p>
-        <ul>
-          <li><strong>Three duty commands</strong> — <code>duty_a</code>, <code>duty_b</code>, <code>duty_c</code> — is the <em>control architecture</em>. That has not changed.</li>
-          <li><strong>Six PWM lines plus DISABLE</strong> — seven digital outputs — is the <em>pin count</em>.</li>
-        </ul>
-        <p>The FPGA expands each duty command into a physical HI/LO pair. This was corrected on 2026-08-05: the earlier assumption was that the gate driver generated the complementary output, which would have meant three lines plus an enable.</p>
-        <p>The UCC21222 inserts dead time and interlock <em>between two signals you provide</em>. It does not create the second one. <code>INB</code> is an independent input and there is no inverter on the board.</p>`,
-    c: [['PCB_CROSSCHECK_2026-08-05.md', '#/pcb'], ['TI UCC21222 datasheet', 'https://www.ti.com/lit/ds/symlink/ucc21222.pdf']],
-    p: '#/pcb'
-  },
-  {
-    id: 'hall-5v',
-    k: 'hall 5v 3.3v level pullup safe zynq tolerant voltage protection blocker damage',
-    a: `<p>This is a real hardware blocker, not a detail.</p>
-        <p>Each Hall line has a <strong>10 kΩ pull-up to 5 V</strong>, then 100 Ω series and 100 nF to ground, before reaching J5. <strong>Zynq I/O banks are not 5 V tolerant.</strong></p>
-        <p>The 100 Ω series resistor limits current into the input clamp diode but leaves the pin above its absolute maximum rating. It is not adequate protection on its own.</p>
-        <p>The clean fix is to move the pull-ups to <code>3V3</code>. The 5 V supply feeding the Hall connector itself can stay, since many Hall sensors want it.</p>
-        <p>Until this is resolved, do not connect the Hall lines to the FPGA.</p>`,
-    c: [['PCB_CROSSCHECK_2026-08-05.md', '#/pcb-flags'], ['FPGA_KNOWN_INFO_2026-08-05.md', '#/questions']],
-    p: '#/questions'
-  },
-  {
-    id: 'simulated',
-    k: 'simulated tested compile run vivado results pass fail hardware proven verified evidence',
-    a: `<p><strong>Nothing has been simulated and nothing has been tested on hardware.</strong></p>
-        <ul>
-          <li>Six RTL modules and six self-checking testbenches are written. <strong>No simulator has ever executed them.</strong> When last checked, <code>vivado</code>, <code>xvlog</code>, <code>xelab</code>, <code>iverilog</code> and <code>verilator</code> were all absent from PATH.</li>
-          <li>There are no oscilloscope captures, no bring-up logs and no photographs of a powered board. The PCB has not been fabricated.</li>
-        </ul>
-        <p>What <em>has</em> produced real output: <code>board_interface_check.m</code> ran in MATLAB and its output is saved in <code>board_interface_check_LAST_RUN.txt</code>. That is a numerical consistency check, not a hardware test.</p>
-        <p>The interactive models on this site are JavaScript reimplementations of the described behaviour. They are explanatory tools, not simulator output.</p>`,
-    c: [['FPGA_KNOWN_INFO_2026-08-05.md', '#/overview'], ['matlab/board_interface_check_LAST_RUN.txt', '#/matlab']],
-    p: '#/overview'
-  },
-  {
-    id: 'pinmap',
-    k: 'pin map header j3 j4 j5 arduino d11 d10 a0 which pin where mapping shield',
-    a: `<p>Header positions are <strong>confirmed from the netlist</strong>. The Arduino D/A names are <strong>inferred</strong> and need confirming before XDC.</p>
-        <p><strong>Digital out:</strong> MCU HI A = J4.7, MCU LO A = J4.8, MCU HI B = J4.9, MCU LO B = J5.2, MCU HI C = J5.3, MCU LO C = J5.5, DISABLE = J4.10.</p>
-        <p><strong>Digital in:</strong> MCU HALL A = J5.1, HALL B = J5.4, HALL C = J5.6.</p>
-        <p><strong>Analog in:</strong> J3.1–J3.6 = CSENSE A, CSENSE B, CSENSE C, VSENSE A, VSENSE Vm, MOTOR THERM.</p>
-        <p>The inferred Arduino reading is DISABLE = D8, HI B = D9, LO A = D10, HI A = D11, LO C = D3, HI C = D5, LO B = D6, Hall on D2/D4/D7, analog A0–A5 in J3 order. All six PWM nets land on classic Uno PWM pins, which supports the reading — but it is still an inference.</p>`,
-    c: [['PCB_CROSSCHECK_2026-08-05.md', '#/pcb'], ['FPGA_KNOWN_INFO_2026-08-05.md', '#/pcb']],
-    p: '#/pcb'
-  },
-  {
-    id: 'deadtime',
-    k: 'dead time deadtime nonoverlap non-overlap ticks dt resistor shoot through policy how much',
-    a: `<p>There are two mechanisms and the policy between them is <strong>still open</strong>.</p>
-        <ul>
-          <li><strong>FPGA side:</strong> <code>pwm_3phase_center_aligned.v</code> has a <code>nonoverlap_ticks</code> parameter. The window is symmetric, so the both-off time per crossing is <strong>2 × nonoverlap_ticks</strong>. At 100 MHz with the placeholder value of 20, that is 40 cycles = 400 ns.</li>
-          <li><strong>Driver side:</strong> the UCC21222 has a resistor-programmed dead time on its DT pin (R28/R36/R61 to GND). The schematic comment on all three is literally "Configurable" — the value is not final.</li>
-        </ul>
-        <p>Stacking both is the safe default: total dead time is the sum and no single failure removes it. The cost is modulation range. Relying on the driver alone gives cleaner range but requires trusting a resistor value that has not been set.</p>
-        <p>Until the team decides, FPGA-side non-overlap is the safer default and stays a parameter.</p>`,
-    c: [['PCB_CROSSCHECK_2026-08-05.md', '#/fpga-pwm'], ['fpga/rtl/pwm_3phase_center_aligned.v', '#/fpga-pwm'], ['TI UCC21222 datasheet', 'https://www.ti.com/lit/ds/symlink/ucc21222.pdf']],
-    p: '#/fpga-pwm'
-  },
-  {
-    id: 'pspl',
-    k: 'ps pl split zynq arm fabric processing system programmable logic what goes where partition',
-    a: `<p>The test is: <strong>does a late answer break something?</strong></p>
-        <p><strong>PL (fabric)</strong> — anything inside the PWM period:</p>
-        <ul><li>PWM timing and HI/LO generation</li><li>Hall capture and sector decode</li><li>Current and voltage limit checks</li><li>Fast inhibit and DISABLE</li><li>Sample timing</li><li>Eventually the fixed-point FOC blocks</li></ul>
-        <p><strong>PS (ARM)</strong> — anything measured in milliseconds or in human decisions:</p>
-        <ul><li>Startup mode and the state machine</li><li>Commands and setpoints</li><li>Thresholds written into fabric registers</li><li>Logging, telemetry, communications</li><li>Recovery policy after a latched trip</li></ul>
-        <p>A PWM edge 50 µs late produces the wrong motor voltage. A log line 50 ms late is still a fine log line.</p>
-        <p><strong>There is no AXI register map yet.</strong> It should be defined after the pin map and ADC route are known.</p>`,
-    c: [['FPGA_KNOWN_INFO_2026-08-05.md', '#/architecture'], ['PCB_CROSSCHECK_2026-08-05.md', '#/architecture']],
-    p: '#/architecture'
-  },
-  {
-    id: 'adc',
-    k: 'adc xadc analog route where sample external convert measurement path six channels',
-    a: `<p><strong>Still open.</strong> This is one of the four biggest blockers.</p>
-        <p>Six analog channels terminate on the J3 header: CSENSE A/B/C, VSENSE A, VSENSE Vm and MOTOR THERM. On an Arty Z7 those pins reach the XADC — but that is platform knowledge, not something the board files state.</p>
-        <p>Why it matters: whether the design uses XADC, an external ADC, or a PS-side path changes the sample timing and the latency budget for the current loop. If XADC is multiplexed across channels, simultaneous three-phase sampling becomes a control-loop concern.</p>
-        <p>For context, an Arty Z7 has six single-ended 0–3.3 V XADC inputs and four differential 0–1.0 V inputs. The single-ended count matching the six channels is suggestive but is not confirmation.</p>
-        <p>Related unknowns: the min/max voltage reaching the ADC for each signal, and the full-scale needed to convert the monitor limits into volts.</p>`,
-    c: [['PCB_CROSSCHECK_2026-08-05.md', '#/questions'], ['AMD XADC User Guide UG480', 'https://docs.amd.com/r/en-US/ug480_7Series_XADC'], ['Digilent Arty Z7 reference manual', 'https://digilent.com/reference/programmable-logic/arty-z7/reference-manual']],
-    p: '#/questions'
-  },
-  {
-    id: 'opa-flag',
-    k: 'opa4388 pin reversed mirrored symbol supply backwards v+ v- fab error red flag',
-    a: `<p>This is the most serious netlist finding.</p>
-        <p>On both U10 and U12 the netlist puts <code>GND</code> on pin 4 and <code>3V3</code> on pin 11. The TI datasheet for the SOIC-14 OPA4388 says <strong>pin 4 = V+</strong> and <strong>pin 11 = V−</strong>.</p>
-        <p>The feedback networks also land on what the datasheet calls the non-inverting pins. Everything is consistent with the custom schematic symbol carrying a mirrored pin-number map (roughly 2↔3, 4↔11, 5↔6, 9↔10).</p>
-        <p><strong>If the symbol is wrong,</strong> a fabricated board would have both quad op-amps powered backwards and there would be no working current or voltage sense at all.</p>
-        <p>This needs someone to open the symbol in Altium and check it against the datasheet. Netlist extraction is not visual confirmation. The project notes record that the team already knows about this and that Angelina said she will fix it.</p>`,
-    c: [['PCB_CROSSCHECK_2026-08-05.md', '#/pcb-flags'], ['TI OPA2388/OPA4388 datasheet', 'https://www.ti.com/lit/ds/symlink/opa2388.pdf'], ['FPGA_KNOWN_INFO_2026-08-05.md', '#/pcb-flags']],
-    p: '#/pcb-flags'
-  },
-  {
-    id: 'qformat',
-    k: 'q format q1.15 fixed point quantise quantize scale encode decode saturate bits fractional',
-    a: `<p>Q1.15 means one sign bit and fifteen fractional bits in a 16-bit integer. The scale is 2^15 = 32768.</p>
-        <ul><li>0.5 encodes as 16384</li><li>0.25 encodes as 8192</li><li>Range is −1.0 to +0.99997, resolution 1/32768 ≈ 3.05e−5</li></ul>
-        <p>Two implementation details in the MATLAB scripts matter:</p>
-        <ol>
-          <li><strong>Saturate, never wrap.</strong> If an out-of-range value wrapped, a slightly-too-large positive current would read as a large negative one, and the control loop would push harder in exactly the wrong direction.</li>
-          <li><strong>Round before shifting.</strong> Multiplying two Q1.15 values gives Q2.30; getting back to Q1.15 means shifting right by 15. A naive shift truncates toward negative infinity and biases every product slightly negative — which accumulates in an integrator running at 20 kHz. <code>q_mul_q15</code> adds half an LSB first, giving round-half-away-from-zero.</li>
-        </ol>`,
-    c: [['matlab/foc_fixed_point_starter.m', '#/matlab-fixed'], ['matlab/stage1_3pwm_foc_sim.m', '#/matlab-fixed']],
-    p: '#/matlab-fixed'
-  },
-  {
-    id: 'clarke-park',
-    k: 'clarke park transform inverse alpha beta d q id iq rotating frame why theta angle',
-    a: `<p>They turn three moving phase currents into two numbers that hold still.</p>
-        <p><strong>Clarke</strong> drops three phases to two orthogonal stationary components. Because ia + ib + ic = 0 with no neutral, the third carries no extra information: <code>alpha = ia</code>, <code>beta = (ia + 2·ib)/√3</code>.</p>
-        <p><strong>Park</strong> rotates that frame by the rotor electrical angle so it turns <em>with</em> the rotor: <code>id = alpha·cos θ + beta·sin θ</code>, <code>iq = −alpha·sin θ + beta·cos θ</code>. In steady state the sinusoids become constants.</p>
-        <p><code>i_d</code> is aligned with the rotor field and produces flux, not torque — it is commanded to <strong>zero</strong> for a surface PMSM or BLDC. <code>i_q</code> is perpendicular and produces the torque.</p>
-        <p><strong>Inverse Park</strong> is the same rotation backwards, taking the PI loops' <code>v_d</code>/<code>v_q</code> output back to the stationary frame so it can become duty cycles.</p>
-        <p>Everything here depends on knowing θ. Three Hall sensors resolve it to within 60°, which is why the angle is the weak link in the near-term plan.</p>`,
-    c: [['matlab/foc_fixed_point_starter.m', '#/matlab-clarke'], ['MathWorks: Clarke and Park transforms', 'https://www.mathworks.com/discovery/clarke-and-park-transforms.html']],
-    p: '#/matlab-clarke'
-  },
-  {
-    id: 'pwm-freq',
-    k: 'pwm frequency 20khz period counts 2500 clock 100mhz resolution how fast switching',
-    a: `<p>The working numbers are 100 MHz fabric clock and 20 kHz PWM, giving <code>period = 2500</code> counts.</p>
-        <p>Because the counter ramps up and back down, one full PWM period is <code>2 × period</code> ticks, so <code>f_pwm = f_clk / (2 × period)</code>. 100e6 / (2 × 2500) = exactly 20000.00 Hz — no rounding error. Duty resolution is 2500 steps, about 11.3 bits.</p>
-        <p>Two caveats:</p>
-        <ul>
-          <li>The 100 MHz clock is a <strong>placeholder</strong>. The real PL fabric clock has not been confirmed in Vivado.</li>
-          <li>20 kHz has <strong>not been confirmed</strong> as the frequency the driver board is designed around. It is a working assumption carried through the MATLAB config.</li>
-        </ul>`,
-    c: [['matlab/board_interface_check_LAST_RUN.txt', '#/fpga-pwm'], ['matlab/board_interface_config.m', '#/fpga-pwm']],
-    p: '#/fpga-pwm'
-  },
-  {
-    id: 'voltage-path',
-    k: 'voltage sense vsense divider amc1311 vm bus 750k 20k ratio 96v scaling',
-    a: `<p>Voltage sense mirrors the current-sense architecture, on two channels:</p>
-        <ul>
-          <li><strong>VSENSE A</strong>: PHASE A− → 750 kΩ + 750 kΩ with 20 kΩ to PGND → AMC1311 (U11) → OPA4388 (U12) → <code>MCU VSENSE A</code> → J3.4</li>
-          <li><strong>VSENSE Vm</strong>: Vm connector pin 1 → identical divider → AMC1311 (U14) → U12 → <code>MCU VSENSE Vm</code> → J3.5</li>
-        </ul>
-        <p>Divider ratio is 20/1520 ≈ <strong>1:76</strong>. A 96 V input gives about 1.26 V at the AMC1311, inside its 0–2 V range.</p>
-        <p><strong>Open:</strong> a schematic note reads "96V to 1V65", which does not match 96/76 ≈ 1.26 V. The maximum Vm the design must survive is also unstated, and the ADC-side full-scale is unknown — so the monitor limits in <code>voltage_sense_monitor.v</code> cannot yet be converted into volts.</p>`,
-    c: [['PCB_CROSSCHECK_2026-08-05.md', '#/pcb-chips'], ['TI AMC1311 datasheet', 'https://www.ti.com/lit/ds/symlink/amc1311.pdf'], ['matlab/board_interface_check_LAST_RUN.txt', '#/pcb-chips']],
-    p: '#/pcb-chips'
-  },
-  {
-    id: 'monitors',
-    k: 'balance limit monitor current two why separate sum kirchhoff overcurrent per phase difference',
-    a: `<p>They catch different failures, and each alone has a blind spot.</p>
-        <p><strong>Balance monitor</strong> checks |ia + ib + ic| against a limit. In a healthy three-phase system with no neutral, that sum must be about zero — that is Kirchhoff, not a control choice. A persistent non-zero sum means a <em>measurement</em> problem: a broken or mis-scaled channel.</p>
-        <p><strong>Limit monitor</strong> checks |ia|, |ib| and |ic| each against an absolute limit, and reports which phase tripped.</p>
-        <p>The reason both exist: three <em>genuinely</em> large currents can sum to nearly zero. That is real overcurrent that a balance test cannot see. Conversely a single channel reading wrong while magnitudes stay small is invisible to the limit test.</p>
-        <p>Both are purely combinational — no clock port — and both gate on <code>sample_valid</code>.</p>`,
-    c: [['fpga/rtl/phase_current_balance_monitor.v', '#/fpga-safety'], ['fpga/rtl/phase_current_limit_monitor.v', '#/fpga-safety'], ['FPGA_KNOWN_INFO_2026-08-05.md', '#/fpga-safety']],
-    p: '#/fpga-safety'
-  },
-  {
-    id: 'fault',
-    k: 'noc fault nfault protection status signal exist fault_manager removed error line',
-    a: `<p><code>nOC</code> and <code>FAULT</code> <strong>do not exist</strong> on the updated board — zero nets, zero pads, zero schematic labels.</p>
-        <p>The protection story is: UCC21222 internal interlock and dead time, plus the DIS pin, plus whatever the controller decides from CSENSE and VSENSE. The board cannot tell the FPGA that something went wrong; everything the FPGA knows comes from its own measurements.</p>
-        <p>That is why <code>fault_manager.v</code> was <strong>removed</strong> rather than kept, and why the current and voltage monitors matter.</p>
-        <p>Watch out for stale documents: the July 29 and August 3 notes mention <code>nOC</code>/<code>FAULT</code>, but those describe the <em>old</em> board and are superseded.</p>`,
-    c: [['PCB_CROSSCHECK_2026-08-05.md', '#/pcb'], ['UPDATED_DRIVER_BOARD_REVIEW_2026-08-03.md', '#/timeline']],
-    p: '#/fpga-safety'
-  },
-  {
-    id: 'blockers',
-    k: 'blockers blocked open questions biggest what is stopping problems issues top priority',
-    a: `<p>Sixteen open items are tracked. The four that block the most:</p>
-        <ol>
-          <li><strong>Board-side net-to-header mapping</strong> — blocks XDC and any hardware connection.</li>
-          <li><strong>ADC route</strong> — blocks the current-loop timing budget and all analog scaling.</li>
-          <li><strong>Bidirectional current representation</strong> — blocks FOC itself. As parsed, the chain is ground-referenced at unity gain, so negative current clips.</li>
-          <li><strong>Hall 5 V pull-ups into 3.3 V I/O</strong> — a hardware safety issue that blocks connecting the Hall lines at all.</li>
-        </ol>
-        <p>Two fabrication blockers on the PCB side: the OPA4388 pin mapping and the fact that nothing sources <code>12V ISO</code>.</p>
-        <p>The one high-value task blocked by <em>nothing</em>: run the six testbenches in Vivado.</p>`,
-    c: [['FPGA_KNOWN_INFO_2026-08-05.md', '#/questions'], ['PCB_CROSSCHECK_2026-08-05.md', '#/questions']],
-    p: '#/questions'
-  },
-  {
-    id: 'next',
-    k: 'next do now todo start task priority what should i work on first',
-    a: `<p>Highest value and blocked by nothing: <strong>run the six testbenches in Vivado.</strong> They have never been executed. Expect to find things.</p>
-        <p>Also unblocked right now:</p>
-        <ul>
-          <li>Install Vivado and the Digilent board files</li>
-          <li>Build a throwaway LED blink project to learn the XDC workflow — this also answers the fabric clock and I/O bank voltage questions without anyone else's input</li>
-          <li>Write the top-level wrapper tying the six modules together</li>
-          <li>Send the ten PCB questions, prioritising the OPA4388 pinout and the 12V ISO source since both are fabrication blockers</li>
-        </ul>
-        <p>Blocked and waiting: XDC constraints, Hall connection, current and voltage scaling, the final non-overlap value.</p>`,
-    c: [['FPGA_TODO.md', '#/state'], ['FPGA_KNOWN_INFO_2026-08-05.md', '#/state']],
-    p: '#/state'
-  },
-  {
-    id: 'ucc',
-    k: 'ucc21222 gate driver interlock isolated what does it do chip u5 u9 u13',
-    a: `<p>The UCC21222 is an isolated dual-channel gate driver with a disable pin. Three of them, U5/U9/U13, one per phase.</p>
-        <ul>
-          <li><code>INA</code> takes the high-side signal, <code>INB</code> takes the low-side. Each arrives through a 49.9 Ω / 33 pF RC filter from the shield header.</li>
-          <li><code>DIS</code> (pin 5) is the shared DISABLE line — active high, internally pulled high.</li>
-          <li><code>DT</code> sets dead time via a resistor to ground (R28/R36/R61), currently marked "Configurable".</li>
-          <li>Output stages run on <code>12V ISO</code> with bootstrap-style diode feeds (ER2D + 1.5 Ω) for the high-side <code>VDDA</code>.</li>
-        </ul>
-        <p>The important structural point: <code>INB</code> is <strong>independent</strong>. The chip adds dead time and interlock between two signals you provide — it does not generate the complementary signal.</p>`,
-    c: [['PCB_CROSSCHECK_2026-08-05.md', '#/pcb-chips'], ['TI UCC21222 datasheet', 'https://www.ti.com/lit/ds/symlink/ucc21222.pdf']],
-    p: '#/pcb-chips'
-  },
-  {
-    id: 'hall-decode',
-    k: 'hall decoder sector 001 101 illegal 000 111 sequence commutation decode table direction',
-    a: `<p><code>hall_decoder.v</code> maps <code>{hall_a, hall_b, hall_c}</code> as: 001→0, 101→1, 100→2, 110→3, 010→4, 011→5. Codes <strong>000 and 111 are illegal</strong> and decode to 7, raising <code>illegal_state</code>.</p>
-        <p>Two flip-flop stages synchronise the asynchronous inputs before anything uses them. There is no extra RTL debounce — the board provides a 100 Ω / 100 nF filter (≈10 µs).</p>
-        <p>Direction only updates on an <em>adjacent</em> sector step. A jump from sector 0 to sector 3 is physically impossible at any sane speed, so it increments <code>bad_transition_count</code> instead. That distinguishes "the motor reversed" from "the Hall wiring is unreliable".</p>
-        <p><strong>Important:</strong> the sector ordering is a <strong>placeholder</strong>. Which physical rotor position matches which code depends on how the sensors were installed in the specific motor. It has to be found during motor commissioning.</p>`,
-    c: [['fpga/rtl/hall_decoder.v', '#/fpga-hall'], ['FPGA_KNOWN_INFO_2026-08-05.md', '#/fpga-hall']],
-    p: '#/fpga-hall'
-  },
-  {
-    id: 'therm',
-    k: 'motor therm thermistor temperature sixth analog channel 499 new signal',
-    a: `<p><code>MCU MOTOR THERM</code> is the motor thermistor. It comes from CC1.6 with a 499 Ω pull-up to <code>3V3</code>, landing on J3.6.</p>
-        <p>It is notable because it appeared in <strong>no earlier FPGA or MATLAB document</strong> — it was discovered during the August 5 netlist extraction, and it is why the analog channel count went from 5 to 6.</p>
-        <p>Converting its voltage into a temperature needs the thermistor part and its resistance-temperature curve, which are not in the driver-board files. That is an open question, though a low-severity one.</p>`,
-    c: [['PCB_CROSSCHECK_2026-08-05.md', '#/pcb'], ['matlab/board_interface_check_LAST_RUN.txt', '#/pcb']],
-    p: '#/pcb'
-  },
-  {
-    id: 'why-fpga',
-    k: 'why fpga instead microcontroller mcu benefit advantage determinism reason purpose',
-    a: `<p>Determinism and parallelism — and only in specific places.</p>
-        <p>In fabric, a PWM edge happens on the clock cycle you specified, not "in the interrupt handler after whatever else was running finished". At a 20 kHz control rate each update has 50 µs, and a software system spends part of that budget on jitter it cannot fully control. Fabric spends none.</p>
-        <p>Parallelism: three phase currents can be checked against limits at the same instant rather than in sequence, and a shutdown path can react in a handful of clock cycles without asking a processor.</p>
-        <p>The honest counter-argument, which this project should be able to answer: an FPGA costs more, takes longer to develop, and burns more static power. Whether the determinism is worth it is exactly what the SURG research is measuring.</p>`,
-    c: [['SURG_FPGA_FOC.md', '#/overview'], ['README.md', '#/overview']],
-    p: '#/overview'
-  },
-  {
-    id: '12viso',
-    k: '12v iso isolated supply power source module unrouted designator gate drive powered',
-    a: `<p><strong>Nothing drives the <code>12V ISO</code> net.</strong> This is a fabrication blocker.</p>
-        <p>The 15 W isolated DC-DC module carries the placeholder designator <code>?</code> and all six of its pads are unrouted. No other component sources the net. As parsed, the entire isolated gate-drive side has no power source.</p>
-        <p>Related loose ends in the same area: pin 2 of the 3-pin Vm connector (<code>H??</code>) is unrouted, and the designators <code>?</code>, <code>H??</code> and <code>U?</code> are unassigned.</p>
-        <p>This needs the PCB team to give the module a real designator and connect it before fab.</p>`,
-    c: [['PCB_CROSSCHECK_2026-08-05.md', '#/pcb-flags']],
-    p: '#/pcb-flags'
-  },
-  {
-    id: 'power',
-    k: 'power rails 3v3 5v 12v buck j1 supply domain pgnd gnd isolation power-up sequence',
-    a: `<p>Two electrical domains that share no ground.</p>
-        <p><strong>Logic side (GND):</strong> 12 V in at J1 (Molex 39-30-1021) → U1 buck to <code>3V3</code>, U3 buck to <code>5V</code>. The 5 V rail feeds the Hall pull-ups.</p>
-        <p><strong>Isolated side (PGND):</strong> <code>12V ISO</code> → U7 buck to <code>5V ISO</code>. Gate-driver output stages run from <code>12V ISO</code> with bootstrap-style diode feeds (ER2D + 1.5 Ω) for the high-side supply.</p>
-        <p>The only path between the domains is the isolation barrier inside the UCC21222, AMC1300 and AMC1311 packages.</p>
-        <p><strong>Two open items:</strong> nothing sources <code>12V ISO</code> as parsed, and the board puts 12 V on the shield VIN position (J2.8) while the shield 5V/3V3/IOREF/RESET pins are unconnected — which needs to be intentional if the Arty is also USB-powered. No written power-up order exists yet.</p>`,
-    c: [['PCB_CROSSCHECK_2026-08-05.md', '#/pcb'], ['FPGA_KNOWN_INFO_2026-08-05.md', '#/questions']],
-    p: '#/pcb'
-  },
-  {
-    id: 'duty-gen',
-    k: 'duty generation svpwm centring centering min max clamp 0.02 0.98 space vector modulation',
-    a: `<p>After inverse Park there are two stationary-frame voltages. Turning them into three duties takes an inverse Clarke, then a common-mode trick:</p>
-        <p><code>v_zero = −0.5 × (max(va,vb,vc) + min(va,vb,vc))</code>, added to all three.</p>
-        <p>Adding the same offset to every phase changes nothing the motor can see — the motor responds to <em>differences</em> between phase voltages, and a common offset cancels out of every difference. That freedom is worth about 15% more usable bus voltage, which is the practical benefit of space-vector modulation over plain sine. The characteristic flat-topped duty waveform is the offset doing its work.</p>
-        <p>The clamp is 0.02 to 0.98, not 0 to 1, because a duty of exactly 0 or 1 means one switch never turns off. That breaks the bootstrap supply for the high-side driver, which needs the switch node to go low periodically to recharge, and it removes the window for a PWM-centre current sample.</p>`,
-    c: [['matlab/stage1_3pwm_foc_sim.m', '#/matlab-pi']],
-    p: '#/matlab-pi'
-  },
-  {
-    id: 'antiwindup',
-    k: 'pi loop anti windup integrator saturate gains kp ki tuning current loop',
-    a: `<p>The PI loops regulate <code>i_d</code> and <code>i_q</code> independently. The interesting part is the anti-windup.</p>
-        <p><code>pi_fixed_step</code> computes an <code>integ_candidate</code>, uses it to produce the output, and only <em>then</em> conditionally commits it. If the output is saturated <em>and</em> the error is still pushing further into that limit, the integrator freezes instead of accumulating.</p>
-        <p>Without that, a saturated integrator keeps accumulating error it cannot act on. When the reference comes back into range, the loop has to unwind all of it before responding — which shows up as large overshoot and slow recovery.</p>
-        <p>Current gains in <code>stage1_3pwm_foc_sim.m</code>: <code>kp_d = 0.22</code>, <code>ki_d = 0.012</code>, <code>kp_q = 0.30</code>, <code>ki_q = 0.016</code>, output limit 0.46. These are sandbox values against a synthetic first-order plant, not values tuned on a real motor.</p>`,
-    c: [['matlab/stage1_3pwm_foc_sim.m', '#/matlab-pi'], ['matlab/foc_fixed_point_starter.m', '#/matlab-pi']],
-    p: '#/matlab-pi'
-  },
-  {
-    id: 'shunt',
-    k: 'shunt value resistor where power board unknown missing current scaling amps',
-    a: `<p>The shunts are <strong>not on the driver board</strong> and their value is unknown.</p>
-        <p>The AMC1300 measures <code>PHASE x+</code> against <code>PHASE x−</code> through the H1/H2/H3 headers (6-pin, wired 1 = GATE HI x, 2 = PHASE x+, 3 = PHASE x−, 4/6 = PGND, 5 = GATE LO x). That places the shunt on the <em>power board</em>, between those two nodes.</p>
-        <p>Consequence: the end-to-end amps-to-volts chain cannot be closed. Everything else in it is known — AMC1300 gain 8.2 from the datasheet, OPA4388 diff stage at unity — so <code>MCU CSENSE ≈ 8.2 × V_shunt</code>, but <code>V_shunt</code> per amp is missing.</p>
-        <p>This is why <code>cfg.current.sensitivity_V_per_A</code> is deliberately <code>NaN</code> rather than a plausible-looking placeholder.</p>`,
-    c: [['PCB_CROSSCHECK_2026-08-05.md', '#/pcb-chips'], ['matlab/board_interface_config.m', '#/matlab']],
-    p: '#/questions'
-  },
-  {
-    id: 'nan',
-    k: 'nan why placeholder config scaling unknown values matlab board_interface_config',
-    a: `<p>Deliberate discipline. <code>board_interface_config.m</code> holds every board assumption in one place so MATLAB, HDL Coder and Vivado cannot drift apart — and every value that is genuinely unknown is set to <code>NaN</code> rather than to a plausible guess.</p>
-        <p>A plausible-looking placeholder would propagate silently into the fixed-point scaling, into generated HDL, and eventually into a bitstream driving real hardware. <code>NaN</code> propagates loudly: anything computed from it becomes <code>NaN</code> and the problem surfaces immediately.</p>
-        <p>Currently <code>NaN</code>: current <code>ref_V</code> and <code>sensitivity_V_per_A</code>, voltage-sense <code>ref_V</code>, <code>scale_V_per_V</code> and <code>max_adc_V</code>.</p>`,
-    c: [['matlab/board_interface_config.m', '#/matlab']],
-    p: '#/matlab'
-  },
-  {
-    id: 'centre-aligned',
-    k: 'center centre aligned counter triangle up down why sample strobe peak',
-    a: `<p>The counter ramps up to <code>period</code> and back down to zero rather than resetting to zero. That makes each pulse symmetric about the counter peak.</p>
-        <p>Two benefits. Switching edges land symmetrically around the peak, which is better for harmonic content than edge-aligned PWM. And the counter peak is a clean, predictable point to sample phase current — far from every switching edge, where the measurement is quietest.</p>
-        <p><code>pwm_peak_strobe</code> pulses at the peak and <code>cycle_strobe</code> pulses at zero. The zero crossing is also where all three duties are loaded together, so a control update can never apply a new <code>duty_a</code> against an old <code>duty_b</code>.</p>
-        <p>Note that <code>pwm_peak_strobe</code> is described in the project notes as a <strong>provisional</strong> timing marker, not a finalised ADC trigger — that depends on the unresolved ADC route.</p>`,
-    c: [['fpga/rtl/pwm_3phase_center_aligned.v', '#/fpga-pwm'], ['FPGA_KNOWN_INFO_2026-08-05.md', '#/fpga-pwm']],
-    p: '#/fpga-pwm'
-  }
-];
+/* ------------------------------------------------------- fact matching */
 
-const SUGGESTED = [
-  'What do I need before XDC?',
-  'What does DISABLE do?',
-  'What is the current sensing path?',
-  'Are we doing sensorless FOC?',
-  'What RTL files do I need?',
-  'What should I say in a meeting?',
-  'Has anything been simulated?',
-  'What are the biggest blockers?',
-  'Why six PWM lines and not three?',
-  'Explain Q1.15 fixed point'
-];
+const FACT_STOP = Retrieval.tokens;
 
-const STOP = new Set(['the','a','an','is','are','was','were','be','been','do','does','did','what','which','how','why','when','where','who','i','we','you','it','to','of','in','on','for','and','or','my','our','this','that','with','from','can','should','would','need','about','me','have','has','if','so','get','got','tell','explain','please','there','their','they']);
-
-function tokenize(s) {
-  return s.toLowerCase().replace(/[^a-z0-9.+\- ]/g, ' ').split(/\s+/)
-    .filter(t => t.length > 1 && !STOP.has(t));
-}
-
-/* Inverse-document-frequency weighting so rare terms dominate the match. */
-const DF = (() => {
+const FACT_DF = (() => {
   const df = {};
-  KB.forEach(e => {
-    new Set(tokenize(e.k)).forEach(t => { df[t] = (df[t] || 0) + 1; });
-  });
+  FACTS.forEach(e => new Set(Retrieval.tokens(e.k)).forEach(t => { df[t] = (df[t] || 0) + 1; }));
   return df;
 })();
 
-function scoreEntry(entry, qTokens) {
-  const kTokens = new Set(tokenize(entry.k));
+function scoreFact(fact, qTokens) {
+  const kt = new Set(Retrieval.tokens(fact.k));
   let score = 0;
-  qTokens.forEach(t => {
-    let hit = kTokens.has(t);
+  for (const t of new Set(qTokens)) {
+    let hit = kt.has(t);
     if (!hit) {
-      // partial match: a query token that is a prefix of a keyword, or vice versa
-      for (const k of kTokens) {
+      for (const k of kt) {
         if (k.length > 3 && t.length > 3 && (k.startsWith(t) || t.startsWith(k))) { hit = true; break; }
       }
     }
-    if (hit) score += Math.log(1 + KB.length / (DF[t] || 1)) + 1;
-  });
+    if (hit) score += Math.log(1 + FACTS.length / (FACT_DF[t] || 1)) + 1;
+  }
   return score;
 }
 
-function answer(question) {
-  const q = tokenize(question);
-  if (!q.length) return null;
+/* "What are the inputs of hall_decoder?" wants the port list out of the file,
+   not a curated paragraph about Hall sensing. When the question names a real
+   module and asks about its interface, skip the curated layer entirely and
+   let retrieval quote the source. */
+const MODULE_NAMES = (typeof KB_CHUNKS !== 'undefined' ? KB_CHUNKS : [])
+  .filter(c => c.kind === 'rtl' || c.kind === 'matlab')
+  .map(c => c.file.replace(/^.*\//, '').replace(/\.(v|m)$/, ''));
 
-  const ranked = KB.map(e => ({ e, s: scoreEntry(e, q) }))
-    .sort((a, b) => b.s - a.s);
+function isInterfaceQuestion(question) {
+  const n = question.toLowerCase();
+  if (!/\b(input|output|port|signal|parameter|argument|interface|declaration)s?\b/.test(n)) return false;
+  return MODULE_NAMES.some(name => n.includes(name) || n.includes(name.replace(/_/g, ' ')));
+}
 
-  const best = ranked[0];
-  const threshold = Math.max(2.4, q.length * 0.55);
-  if (!best || best.s < threshold) return null;
-
-  const related = ranked.slice(1, 4).filter(r => r.s > threshold * 0.55).map(r => r.e);
-  return { entry: best.e, related };
+/* A guard match beats every lexical score. This is what keeps "has anything
+   been simulated" pinned to the honest answer instead of drifting to a
+   passage that merely mentions simulation. */
+function matchFact(question, qTokens) {
+  if (isInterfaceQuestion(question)) return null;
+  for (const f of FACTS) {
+    if (f.must && f.must.test(question)) return { fact: f, guarded: true, score: 99 };
+  }
+  let best = null;
+  for (const f of FACTS) {
+    const s = scoreFact(f, qTokens);
+    if (!best || s > best.score) best = { fact: f, guarded: false, score: s };
+  }
+  const threshold = Math.max(3.2, qTokens.length * 0.7);
+  return best && best.score >= threshold ? best : null;
 }
 
 /* ------------------------------------------------------------- rendering */
+
+function htmlEsc(s) {
+  return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
+/* Chunk text keeps markdown-lite bullets; render them rather than dumping
+   raw dashes into the panel. */
+const CLIP = 230;
+function clip(s) { return s.length > CLIP ? s.slice(0, CLIP).replace(/\s+\S*$/, '') + '…' : s; }
+
+function renderExcerpt(text, limit = 3) {
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean).slice(0, limit);
+  const bullets = lines.filter(l => /^[-*•]\s+|^\d+\.\s+/.test(l));
+  if (bullets.length >= 2) {
+    return '<ul>' + bullets.map(l => `<li>${htmlEsc(clip(l.replace(/^[-*•]\s+|^\d+\.\s+/, '')))}</li>`).join('') + '</ul>';
+  }
+  return lines.map(l => `<p>${htmlEsc(clip(l.replace(/^[-*•]\s+/, '')))}</p>`).join('');
+}
+
+const STATUS_LABEL = { confirmed: 'Confirmed', inferred: 'Inferred', open: 'Open' };
+
+function sourceLink(chunk) {
+  const where = chunk.lines ? `:${chunk.lines[0]}` : '';
+  if (chunk.url) {
+    return `<a href="${htmlEsc(chunk.url)}" target="_blank" rel="noopener">${htmlEsc(chunk.title)} ↗</a>`;
+  }
+  return `<a href="${htmlEsc(chunk.page)}" data-file="${htmlEsc(chunk.file)}">${htmlEsc(chunk.file)}${where}</a>`;
+}
+
+const TIER_LABEL = {
+  1: 'Project file', 2: 'Datasheet', 3: 'Official docs', 4: 'Application note', 5: 'Video / learning aid',
+};
+
+/* --------------------------------------------------------- answer build */
+
+function buildAnswer(question, mode) {
+  const { hits, intent, qTokens } = Retrieval.search(question, { mode, limit: 8 });
+  const m = Retrieval.MODES[mode] || Retrieval.MODES.quick;
+  const fact = matchFact(question, qTokens);
+  const conf = Retrieval.confidenceOf(hits, qTokens);
+
+  /* Nothing curated and nothing convincing retrieved: say so plainly rather
+     than dressing up the best of a bad set. Coverage is the deciding test —
+     an off-topic question can still score on one incidental word, which is
+     how "airspeed velocity of a swallow" once came back as a MathWorks note
+     about velocity control. */
+  const weak = !hits.length || conf.pct < 28 || conf.coverage < 0.34;
+  if (!fact && weak) {
+    return { html: fallbackHtml(question), plain: 'No reliable source found in the project files.', followUps: [] };
+  }
+
+  const projectHits = hits.filter(h => h.chunk.tier === 1);
+  const backgroundHits = hits.filter(h => h.chunk.tier > 1);
+
+  let html = '';
+  let plain = '';
+
+  /* 1 — the direct answer */
+  let lead;
+  if (fact) {
+    lead = fact.fact.short;
+  } else {
+    const sents = Retrieval.bestSentences(hits[0].chunk, qTokens, m.sentences);
+    lead = sents.length
+      ? sents.map(s => `<p>${htmlEsc(s)}</p>`).join('')
+      : `<p>${htmlEsc((Retrieval.chunkText(hits[0].chunk) || '').slice(0, 260))}…</p>`;
+  }
+  html += `<div class="ans-lead">${fact ? `<p>${lead}</p>` : lead}</div>`;
+  plain += String(lead).replace(/<[^>]+>/g, '') + '\n\n';
+
+  /* 2 — confidence and how settled the topic is */
+  const groups = Retrieval.groupByStatus(hits);
+  const chips = [];
+  chips.push(`<span class="conf conf-${conf.level}" title="${htmlEsc(conf.label)}">Confidence ${conf.pct}%</span>`);
+  if (fact && fact.guarded) chips.push('<span class="conf conf-guard">Project rule</span>');
+  for (const k of ['confirmed', 'inferred', 'open']) {
+    if (groups[k].length) chips.push(`<span class="sbadge sbadge-${k}">${STATUS_LABEL[k]} ${groups[k].length}</span>`);
+  }
+  html += `<div class="ans-chips">${chips.join('')}</div>`;
+
+  /* 3 — the evidence, quoted from the files */
+  const evidence = (projectHits.length ? projectHits : hits).slice(0, m.evidence);
+  if (evidence.length) {
+    html += '<div class="ans-evidence"><b>From the project files</b>';
+    for (const h of evidence) {
+      const c = h.chunk;
+      const body = c.code && m.code
+        ? `<pre class="ans-code"><code>${htmlEsc(c.code.split('\n').slice(0, 14).join('\n'))}</code></pre>`
+        : renderExcerpt(Retrieval.chunkText(c), 3);
+      html += `<figure class="ev">
+        <figcaption>
+          <span class="sbadge sbadge-${c.status}">${STATUS_LABEL[c.status] || c.status}</span>
+          ${sourceLink(c)}
+          ${c.heading ? `<em>${htmlEsc(c.heading)}</em>` : ''}
+          ${c.superseded ? '<span class="sbadge sbadge-stale">superseded note</span>' : ''}
+          ${c.updated ? `<span class="ev-date">updated ${htmlEsc(c.updated)}</span>` : ''}
+        </figcaption>
+        ${body}
+      </figure>`;
+      plain += `[${c.file}${c.lines ? ':' + c.lines[0] : ''}] ${Retrieval.chunkText(c).split('\n')[0]}\n`;
+    }
+    html += '</div>';
+  }
+
+  /* 4 — the long explanation, out of the way unless wanted */
+  if (fact) {
+    html += `<details class="ans-more"><summary>Full detail</summary>${fact.fact.a}</details>`;
+  }
+
+  /* 5 — every source, split by whether it is ours or background reading */
+  html += '<details class="ans-src"><summary>Sources used</summary>';
+  if (projectHits.length) {
+    html += '<div class="src-group"><b>Known from project files</b><ul>' +
+      projectHits.map(h => `<li>${sourceLink(h.chunk)} <em>${htmlEsc(h.chunk.heading || '')}</em></li>`).join('') +
+      '</ul></div>';
+  }
+  if (backgroundHits.length) {
+    html += '<div class="src-group"><b>General background</b><ul>' +
+      backgroundHits.map(h => `<li>${sourceLink(h.chunk)} <span class="tier">${TIER_LABEL[h.chunk.tier]}</span></li>`).join('') +
+      '</ul></div>';
+  }
+  if (fact) {
+    html += '<div class="src-group"><b>Cited by this answer</b><ul>' +
+      fact.fact.c.map(([label, href]) => {
+        const ext = href && href.startsWith('http');
+        return `<li><a href="${htmlEsc(href)}"${ext ? ' target="_blank" rel="noopener"' : ''}>${htmlEsc(label)}${ext ? ' ↗' : ''}</a></li>`;
+      }).join('') + '</ul></div>';
+  }
+  html += `<p class="src-note">Ranking: project files first, then datasheets, then official docs,
+    then application notes. Video is treated as a learning aid, never as evidence.</p>`;
+  html += '</details>';
+
+  /* 6 — guardrail, whenever the question is anywhere near validation */
+  if (/simulat|test|verif|valid|proven|works|hardware|scope|measure|safe to (order|build|fab)/i.test(question)) {
+    html += `<p class="ans-guard">Nothing in this project has been simulated or tested on hardware,
+      and the PCB has not been fabricated. Any claim here is read from a file, not from a result.</p>`;
+  }
+
+  const followUps = Retrieval.followUps(hits, question, 3);
+  return { html, plain, followUps, page: fact ? fact.fact.p : (hits[0] && hits[0].chunk.page) };
+}
+
+function fallbackHtml(question) {
+  const near = Retrieval.search(question, { mode: 'quick', limit: 3 }).hits;
+  let html = `<div class="ans-lead"><p><strong>I don't have a source for that.</strong>
+    I answer only from the project files and the datasheets they cite, so rather than guess, this is a gap.</p></div>`;
+  if (near.length) {
+    html += '<div class="ans-evidence"><b>Closest things I do have</b><ul>' +
+      near.map(h => `<li>${sourceLink(h.chunk)} <em>${htmlEsc(h.chunk.heading || '')}</em></li>`).join('') +
+      '</ul></div>';
+  }
+  html += `<p class="ans-guard">If this is a real project question the documents do not cover, it belongs on the
+    <a href="#/questions">Open Questions</a> page — that is where unresolved items are tracked.</p>`;
+  return html;
+}
+
+/* ---------------------------------------------------------------- panel */
+
+let CHAT_MODE = 'quick';
+
 function chatAppend(html, who) {
   const log = document.getElementById('chatLog');
   const div = document.createElement('div');
@@ -482,78 +248,164 @@ function chatAppend(html, who) {
   return div;
 }
 
-function citeBlock(cites) {
-  if (!cites || !cites.length) return '';
-  const rows = cites.map(([label, href]) => {
-    const external = href && href.startsWith('http');
-    return `<a href="${href}"${external ? ' target="_blank" rel="noopener"' : ''}>${label}${external ? ' ↗' : ''}</a>`;
-  }).join('');
-  return `<div class="msg-cite"><b>Sources</b>${rows}</div>`;
+function respond(question) {
+  const res = buildAnswer(question, CHAT_MODE);
+  const node = chatAppend(res.html, 'bot');
+
+  const bar = document.createElement('div');
+  bar.className = 'ans-actions';
+  const copy = document.createElement('button');
+  copy.type = 'button';
+  copy.className = 'chip';
+  copy.textContent = 'Copy answer';
+  copy.addEventListener('click', async () => {
+    const text = (res.plain || node.textContent).trim();
+    try { await navigator.clipboard.writeText(text); copy.textContent = 'Copied'; }
+    catch { copy.textContent = 'Copy failed'; }
+    setTimeout(() => { copy.textContent = 'Copy answer'; }, 1600);
+  });
+  bar.appendChild(copy);
+  if (res.page) {
+    const open = document.createElement('a');
+    open.className = 'chip';
+    open.href = res.page;
+    open.textContent = 'Open the page';
+    bar.appendChild(open);
+  }
+  node.appendChild(bar);
+
+  if (res.followUps && res.followUps.length) {
+    const fu = document.createElement('div');
+    fu.className = 'ans-followups';
+    fu.innerHTML = '<b>Next</b>';
+    res.followUps.forEach(q => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'chip';
+      b.textContent = q;
+      b.addEventListener('click', () => ask(q));
+      fu.appendChild(b);
+    });
+    node.appendChild(fu);
+  }
 }
 
-function respond(question) {
-  const res = answer(question);
+function ask(question) {
+  chatAppend(htmlEsc(question), 'user');
+  respond(question);
+}
 
-  if (!res) {
-    chatAppend(
-      `<p>I don't have a reliable answer for that in the project documents.</p>
-       <p>I only answer from the local project files and the vendor datasheets they cite — I won't guess at something the files don't establish. If this is a real project question that the docs don't cover, it probably belongs on the <a href="#/questions">Open Questions</a> page.</p>
-       <p>Things I can answer well: the board signal map, what each RTL module does, the current and voltage sense paths, DISABLE behaviour, the FOC math, what's needed before XDC, and what is and isn't confirmed.</p>`,
-      'bot');
-    return;
-  }
+/* Suggestions follow the page you are on, so they are useful where you are. */
+const PAGE_SUGGESTIONS = {
+  overview: ['What is this project building?', 'Why use an FPGA instead of a microcontroller?', 'Has anything been simulated?'],
+  state: ['What should I do next?', 'What are the biggest blockers?', 'What is confirmed from the netlist?'],
+  architecture: ['What runs in the PS versus the PL?', 'Where does MATLAB fit in?'],
+  pcb: ['What is the current sensing path?', 'What should I ask the PCB team?', 'Why six PWM lines and not three?'],
+  'pcb-chips': ['What does the UCC21222 do?', 'What is the voltage sensing path?'],
+  'pcb-flags': ['What is wrong with the OPA4388 pinout?', 'What powers the 12V ISO rail?'],
+  signals: ['What are the digital outputs?', 'Which pins are analog inputs?'],
+  fpga: ['What RTL files exist?', 'What is still missing in RTL?', 'What are the inputs of hall_decoder?'],
+  'fpga-pwm': ['What PWM frequency are we using?', 'What is the deadtime policy?', 'Why centre-aligned PWM?'],
+  'fpga-hall': ['How does hall_decoder.v find the sector?', 'Are the Hall pins 5 V safe?'],
+  'fpga-safety': ['What does DISABLE do?', 'Is there a FAULT line?', 'Why two current monitors?'],
+  'fpga-tb': ['Have the testbenches been run?', 'What do the testbenches check?'],
+  matlab: ['What do the MATLAB scripts do now?', 'Why are some config values NaN?'],
+  'matlab-fixed': ['Explain Q1.15 fixed point', 'Why round before shifting?'],
+  'matlab-clarke': ['Explain the Clarke and Park transforms', 'Why is i_d commanded to zero?'],
+  'matlab-pi': ['How is anti-windup handled?', 'How are duty cycles generated?'],
+  foc: ['Are we doing sensorless FOC?', 'Why Hall first instead of sensorless?'],
+  vivado: ['What files do I need for Vivado?', 'What blocks final XDC?', 'Has the RTL been compiled?'],
+  questions: ['What are the biggest blockers?', 'What is the ADC route?', 'What shunt value do we use?'],
+  timeline: ['What was corrected on August 5?', 'What changed about the fault line?'],
+  links: ['What should I read first?'],
+  tools: ['Why use an FPGA instead of a microcontroller?'],
+  glossary: ['Explain Q1.15 fixed point', 'Explain the Clarke and Park transforms'],
+};
 
-  const { entry, related } = res;
-  let html = entry.a;
-  if (related.length) {
-    html += `<div class="msg-cite"><b>Related</b>${related.map(r =>
-      `<a href="${r.p}">${r.id.replace(/-/g, ' ')}</a>`).join('')}</div>`;
+const DEFAULT_SUGGESTIONS = [
+  'What files do I need for Vivado?',
+  'What does DISABLE do?',
+  'Are we doing sensorless FOC?',
+  'What is the current sensing path?',
+  'What blocks final XDC?',
+  'What RTL files exist?',
+  'What questions should I ask the PCB team?',
+];
+
+function currentPageId() {
+  const h = (location.hash || '').replace(/^#\//, '');
+  return h.split('?')[0] || 'overview';
+}
+
+function renderSuggestions() {
+  const host = document.getElementById('chatSuggestions');
+  if (!host) return;
+  const page = currentPageId();
+  const list = (PAGE_SUGGESTIONS[page] || []).concat(DEFAULT_SUGGESTIONS).slice(0, 5);
+  const seen = new Set();
+  host.innerHTML = '';
+  for (const q of list) {
+    if (seen.has(q)) continue;
+    seen.add(q);
+    const b = document.createElement('button');
+    b.className = 'chip';
+    b.type = 'button';
+    b.textContent = q;
+    b.addEventListener('click', () => ask(q));
+    host.appendChild(b);
   }
-  html += citeBlock(entry.c);
-  chatAppend(html, 'bot');
 }
 
 function initChat() {
   const panel = document.getElementById('chatPanel');
   const form = document.getElementById('chatForm');
   const input = document.getElementById('chatInput');
-  const sugg = document.getElementById('chatSuggestions');
+  const modeHost = document.getElementById('chatModes');
 
   const open = () => {
     panel.hidden = false;
     input.focus();
     if (!document.getElementById('chatLog').children.length) greet();
+    renderSuggestions();
   };
   const close = () => { panel.hidden = true; };
 
   document.getElementById('chatToggle').addEventListener('click', () => panel.hidden ? open() : close());
   document.getElementById('chatClose').addEventListener('click', close);
+  window.addEventListener('hashchange', () => { if (!panel.hidden) renderSuggestions(); });
 
-  function greet() {
-    chatAppend(
-      `<p>Ask me about the board, the RTL, the control math, or what's still unknown.</p>
-       <p>I answer only from the project documents and the datasheets they cite, and I'll tell you when something isn't established. I won't claim anything has been simulated or tested — because nothing has.</p>`,
-      'bot');
+  if (modeHost) {
+    Object.entries(Retrieval.MODES).forEach(([key, m]) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'chip';
+      b.textContent = m.label;
+      b.setAttribute('aria-pressed', String(key === CHAT_MODE));
+      b.addEventListener('click', () => {
+        CHAT_MODE = key;
+        [...modeHost.children].forEach(c => c.setAttribute('aria-pressed', String(c === b)));
+      });
+      modeHost.appendChild(b);
+    });
   }
 
-  SUGGESTED.forEach(s => {
-    const b = document.createElement('button');
-    b.className = 'chip';
-    b.type = 'button';
-    b.textContent = s;
-    b.addEventListener('click', () => {
-      chatAppend(s, 'user');
-      respond(s);
-    });
-    sugg.appendChild(b);
-  });
+  function greet() {
+    const n = typeof KB_CHUNKS !== 'undefined' ? KB_CHUNKS.length : 0;
+    chatAppend(
+      `<div class="ans-lead"><p>Ask me something specific about the board, the RTL, the control math,
+        or what is still unknown.</p></div>
+       <p class="ans-note">I search ${n} chunks pulled straight from the project files and quote what I find,
+       with the file and line. When the documents do not settle something, I say so instead of filling the gap.</p>
+       <p class="ans-guard">Nothing has been simulated and nothing has been tested on hardware, so I will never
+       tell you otherwise.</p>`,
+      'bot');
+  }
 
   form.addEventListener('submit', e => {
     e.preventDefault();
     const v = input.value.trim();
     if (!v) return;
-    chatAppend(v.replace(/</g, '&lt;'), 'user');
     input.value = '';
-    respond(v);
+    ask(v);
   });
 }
