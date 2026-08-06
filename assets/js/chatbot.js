@@ -485,15 +485,24 @@ function initChat() {
   const input = document.getElementById('chatInput');
   const modeHost = document.getElementById('chatModes');
 
+  const toggleBtn = document.getElementById('chatToggle');
+
   const open = () => {
     panel.hidden = false;
+    toggleBtn.setAttribute('aria-expanded', 'true');
+    toggleBtn.setAttribute('aria-label', 'Close project assistant');
     input.focus();
     if (!document.getElementById('chatLog').children.length) greet();
     renderSuggestions();
   };
-  const close = () => { panel.hidden = true; };
+  const close = () => {
+    panel.hidden = true;
+    toggleBtn.setAttribute('aria-expanded', 'false');
+    toggleBtn.setAttribute('aria-label', 'Open project assistant');
+    toggleBtn.focus();
+  };
 
-  document.getElementById('chatToggle').addEventListener('click', () => panel.hidden ? open() : close());
+  toggleBtn.addEventListener('click', () => panel.hidden ? open() : close());
   document.getElementById('chatClose').addEventListener('click', close);
 
   const expand = document.getElementById('chatExpand');

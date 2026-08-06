@@ -1,12 +1,15 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SURG 2026 — FPGA Motor Controller Documentation</title>
 <meta name="description" content="Interactive technical documentation for the SURG 2026 FPGA-based field-oriented motor controller: PCB interface, RTL, MATLAB/FOC math, Vivado bring-up, and open questions.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,300;0,400;0,700;0,900;1,400&family=Carlito:ital,wght@0,400;0,700;1,400&display=swap">
 <link rel="stylesheet" href="assets/css/main.css">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚙️</text></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%23000'/><circle cx='50' cy='50' r='26' fill='none' stroke='%23008080' stroke-width='9'/></svg>">
 </head>
 <body>
 
@@ -29,8 +32,9 @@
 
   <div class="search-wrap">
     <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
-    <input type="search" id="searchInput" placeholder="Search signals, modules, questions…  (press /)" autocomplete="off"
+    <input type="search" id="searchInput" placeholder="Search signals, modules, questions…" autocomplete="off"
            role="combobox" aria-expanded="false" aria-controls="searchResults" aria-label="Search documentation">
+    <kbd class="search-kbd" aria-hidden="true">⌘K</kbd>
     <div class="search-results" id="searchResults" role="listbox" hidden></div>
   </div>
 
@@ -39,10 +43,13 @@
       <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M19.1 4.9l-1.8 1.8M6.7 17.3l-1.8 1.8"/></svg>
       <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 1 1 10.5 4a7 7 0 0 0 9.5 10.5z"/></svg>
     </button>
-    <button class="icon-btn" id="chatToggle" aria-label="Open project assistant" title="Project assistant">
+    <button class="btn-cta" id="chatToggle" aria-label="Open project assistant" aria-expanded="false" aria-controls="chatPanel">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a8 8 0 0 1-8 8H7l-4 3v-5.5A8 8 0 0 1 11 4h2a8 8 0 0 1 8 8z"/><path d="M9 11h6M9 14.5h3.5"/></svg>
+      <span>Assistant</span>
     </button>
   </div>
+
+  <div class="progress" id="progress" aria-hidden="true"><i></i></div>
 </header>
 
 <div class="layout">
@@ -95,8 +102,9 @@
     <button class="icon-btn" id="chatExpand" aria-label="Expand assistant" title="Expand">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
     </button>
-    <button class="icon-btn" id="chatClose" aria-label="Close assistant" title="Close">
+    <button class="chat-close-btn" id="chatClose" aria-label="Close assistant" title="Close (Esc)">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      <span>Close</span>
     </button>
   </header>
   <div class="chat-modes" id="chatModes" role="group" aria-label="Answer mode"></div>
