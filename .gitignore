@@ -11,3 +11,15 @@ Project Outputs*/
 Thumbs.db
 Desktop.ini
 .DS_Store
+
+# Local editor / tool state
+.claude/
+.codex/
+.vercel/
+
+# Bulk archive material kept locally, not in git history
+SURG/drive-download-*.zip
+project_archive/**/drive-download-*.zip
+SURG_Proposal_Cost_and_Energy_Efficiency_of_FPGA_Based_FOC.pdf
+RAM Chart.xlsx
+SURG Gantt Chart.xlsx

@@ -230,7 +230,7 @@ power / battery / fuse stuff from chat
 
 formula board stuff from chat
 
-- Spencer said he has access to formula motor controller boards / screenshots
+- a teammate has access to formula motor controller boards / screenshots
 - power board screenshots and driver board screenshots were shared in Teams
 - screenshots were not included as files here, only placeholders
 - note from later chat was that formula did a really comprehensive inverter

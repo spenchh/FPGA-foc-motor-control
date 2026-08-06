@@ -388,7 +388,7 @@ const QUESTIONS = [
 const TIMELINE = [
   { date: '2026-06-18', tag: 'Proposal', status: 'confirmed',
     title: 'SURG proposal on record',
-    body: 'Cost and Energy Efficiency of FPGA-Based Field Oriented Control for Lightweight Motors — Spencer Kogoma, Angelina Feng, Spencer Kogoma.',
+    body: 'Cost and Energy Efficiency of FPGA-Based Field Oriented Control for Lightweight Motors — Spencer Kogoma.',
     src: null },
   { date: '2026-06-29', tag: 'Research', status: 'confirmed',
     title: 'Datasheet research log compiled',
@@ -464,7 +464,7 @@ const GLOSSARY = {
 /* --------------------------------------------------------- resource library */
 const LINKS = [
   { cat: 'This project', items: [
-    { t: 'SURG-2026 GitHub repository', u: 'https://github.com/spenchh/fpga-motors', d: 'Project repo. Note: returned 404 to anonymous access when last checked, so it is private or renamed.', k: 'repo' }
+    { t: 'fpga-motors GitHub repository', u: 'https://github.com/spenchh/fpga-motors', d: 'Project repo: RTL, MATLAB, dated notes and the source for this site.', k: 'repo' }
   ]},
   { cat: 'Board & FPGA platform — Digilent / AMD', items: [
     { t: 'Arty Z7 resource center', u: 'https://digilent.com/reference/programmable-logic/arty-z7/start', d: 'Entry point for board files, demos and documentation.' },

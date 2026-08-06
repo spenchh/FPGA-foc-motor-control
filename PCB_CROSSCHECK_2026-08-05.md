@@ -76,7 +76,7 @@ These come from the parsed netlist; they need someone to open the schematic and 
 
 ## GitHub cleanup needed
 
-Caveat first: `https://github.com/spenchh/fpga-motors` returns 404 to anonymous access right now, so the remote itself could not be inspected (private repo or renamed). Everything below is proven from the local `.git` metadata in `Documents\SURG` (remote = that URL; last confirmed sync ≈ Jun 30, remote main at `629522e`; local main `f932e5e` was 2 commits ahead at that time).
+Caveat first: at the time this note was written the remote itself could not be inspected, so everything below is proven from the local `.git` metadata in `Documents\SURG` (last confirmed sync ≈ Jun 30, remote main at `629522e`; local main `f932e5e` was 2 commits ahead at that time). The repo now lives at `https://github.com/spenchh/fpga-motors`.
 
 **Tracked in git now** (i.e., what GitHub has, at most): `README.md`, `FPGA_TODO.md`, `SURG_FPGA_FOC.md`, `assets/*.svg`, `matlab/README.md`, `matlab/foc_fixed_point_starter.m`, and full vendor dumps of `Arduino-SimpleFOCShield-3.2/` and `SimpleFOC-DriveShield-main/` (Gerbers, images, an 8 MB .obj).
 

@@ -1785,8 +1785,7 @@ ${collapse('Altium Designer', 'PCB design', `
 ${cite('crosscheck')}`)}
 
 ${collapse('Git / GitHub', 'in use', `
-<p>Version control for RTL, MATLAB and notes. The repository is <a href="https://github.com/spenchh/fpga-motors" target="_blank" rel="noopener">spenchh/fpga-motors</a>.</p>
-<p>Recorded caveat: that URL returned 404 to anonymous access when last checked, so the repo is private or was renamed.</p>
+<p>Version control for RTL, MATLAB and notes. The repository is <a href="https://github.com/spenchh/fpga-motors" target="_blank" rel="noopener">spenchh/fpga-motors</a>, which is also what this documentation site deploys from.</p>
 <p>Guidance from the cross-check on what belongs in the repo: RTL, testbenches, MATLAB scripts and dated notes should be tracked. Altium binaries, backup directories, meeting <code>.docx</code> files and planning spreadsheets are better kept local or handled deliberately, since binaries in git history are effectively permanent.</p>
 ${cite('crosscheck')}`)}
 
