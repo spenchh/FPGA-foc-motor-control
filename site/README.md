@@ -30,9 +30,28 @@ npx serve -l 8080
 
 Then open <http://localhost:8080>.
 
-To deploy on GitHub Pages, push the repo and point Pages at the `/site` folder on
-the default branch. Nothing needs to change — the site is entirely self-contained
-and uses relative paths.
+---
+
+## Deploying to GitHub Pages
+
+Pages' branch source can only serve from `/` or `/docs` — **not** from an
+arbitrary folder like `/site`. So this repo publishes via GitHub Actions instead:
+[`.github/workflows/pages.yml`](../.github/workflows/pages.yml) uploads `site/`
+as the Pages artifact on every push to `main`.
+
+To switch it on:
+
+1. The repo must be **public**, unless the account has GitHub Pro/Team — Pages
+   does not publish from private repos on the free plan.
+2. **Settings → Pages → Build and deployment → Source: GitHub Actions.**
+3. Push to `main` (or run the workflow manually from the Actions tab).
+
+It then goes live at `https://<user>.github.io/<repo>/`.
+
+Nothing in the site needs to change for this. Every asset path is relative and
+routing is hash-based (`#/overview`), so the site works unmodified whether it is
+served from a domain root or from a project subpath, and Pages needs no rewrite
+rules for deep links.
 
 ---
 
