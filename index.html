@@ -88,11 +88,14 @@
 <!-- Project assistant -->
 <section class="chat-panel" id="chatPanel" hidden aria-label="Project assistant">
   <header class="chat-head">
-    <div>
+    <div class="chat-title">
       <strong>Project Assistant</strong>
-      <small>Offline · answers from project docs only</small>
+      <small id="chatStatus">grounded in the project files</small>
     </div>
-    <button class="icon-btn" id="chatClose" aria-label="Close assistant">
+    <button class="icon-btn" id="chatExpand" aria-label="Expand assistant" title="Expand">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+    </button>
+    <button class="icon-btn" id="chatClose" aria-label="Close assistant" title="Close">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
     </button>
   </header>

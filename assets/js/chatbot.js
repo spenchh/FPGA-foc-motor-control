@@ -248,9 +248,132 @@ function chatAppend(html, who) {
   return div;
 }
 
+/* ------------------------------------------------------------ live model */
+
+/* The model is optional. Retrieval and citations happen here either way, so
+   the sources under an answer are the same whether a model wrote the prose or
+   the templates did — the model is handed passages and cannot cite anything
+   it was not given. */
+const AI = {
+  endpoint: '/api/chat',
+  state: 'unknown',        // unknown | live | offline
+};
+
+/* Minimal markdown so streamed model output reads properly. Deliberately
+   narrow: no raw HTML passes through, everything is escaped first. */
+function mdLite(src) {
+  const blocks = htmlEsc(src).split(/\n{2,}/);
+  return blocks.map(b => {
+    const lines = b.split('\n').map(l => l.trim()).filter(Boolean);
+    if (!lines.length) return '';
+    const isList = lines.every(l => /^([-*•]|\d+\.)\s+/.test(l));
+    if (isList) {
+      const ordered = /^\d+\.\s/.test(lines[0]);
+      const items = lines.map(l => `<li>${inline(l.replace(/^([-*•]|\d+\.)\s+/, ''))}</li>`).join('');
+      return ordered ? `<ol>${items}</ol>` : `<ul>${items}</ul>`;
+    }
+    return `<p>${inline(lines.join(' '))}</p>`;
+  }).join('');
+
+  function inline(s) {
+    return s
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/(^|[\s(])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+  }
+}
+
+async function streamFromModel(question, mode, hits, onChunk) {
+  const chunks = hits.slice(0, 8).map(h => ({
+    file: h.chunk.file, heading: h.chunk.heading, lines: h.chunk.lines,
+    status: h.chunk.status, tier: h.chunk.tier, updated: h.chunk.updated,
+    superseded: !!h.chunk.superseded,
+    text: Retrieval.chunkText(h.chunk).slice(0, 1800),
+  }));
+
+  const res = await fetch(AI.endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question, mode, chunks, history: CHAT_HISTORY.slice(-6) }),
+  });
+
+  if (!res.ok || !res.body) {
+    const err = new Error('model unavailable (' + res.status + ')');
+    err.status = res.status;
+    throw err;
+  }
+
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let full = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    full += dec.decode(value, { stream: true });
+    onChunk(full);
+  }
+  return full;
+}
+
+const CHAT_HISTORY = [];
+
 function respond(question) {
   const res = buildAnswer(question, CHAT_MODE);
+
+  // Offline answer is rendered immediately, then upgraded in place if a model
+  // is reachable. A slow or missing backend therefore costs nothing.
+  if (AI.state === 'offline') return renderAnswer(question, res);
+
+  const { hits } = Retrieval.search(question, { mode: CHAT_MODE, limit: 8 });
+  const node = chatAppend('<div class="ans-lead ans-streaming"><p><span class="typing"><i></i><i></i><i></i></span></p></div>', 'bot');
+  const leadHost = node.querySelector('.ans-lead');
+
+  streamFromModel(question, CHAT_MODE, hits, partial => {
+    leadHost.classList.remove('ans-streaming');
+    leadHost.innerHTML = mdLite(partial);
+    const log = document.getElementById('chatLog');
+    log.scrollTop = log.scrollHeight;
+  }).then(full => {
+    AI.state = 'live';
+    CHAT_HISTORY.push({ role: 'user', content: question }, { role: 'assistant', content: full });
+    leadHost.innerHTML = mdLite(full);
+    // Attach the same deterministic evidence, sources and follow-ups.
+    decorate(node, question, { ...res, plain: full }, true);
+  }).catch(() => {
+    AI.state = 'offline';
+    node.remove();
+    const fallback = renderAnswer(question, res);
+    const note = document.createElement('p');
+    note.className = 'ans-note';
+    note.textContent = 'Offline mode — answering from the project files directly, without a model.';
+    fallback.appendChild(note);
+  });
+}
+
+function renderAnswer(question, res) {
   const node = chatAppend(res.html, 'bot');
+  decorate(node, question, res, false);
+  return node;
+}
+
+function decorate(node, question, res, live) {
+  if (live) {
+    const chips = document.createElement('div');
+    chips.className = 'ans-chips';
+    chips.innerHTML = '<span class="conf conf-live">Live model + project files</span>';
+    node.appendChild(chips);
+    const ev = res.html.match(/<div class="ans-evidence">[\s\S]*?<\/div>(?=<details|<p class="ans-guard"|$)/);
+    if (ev) {
+      const wrap = document.createElement('details');
+      wrap.className = 'ans-src';
+      wrap.innerHTML = '<summary>Passages the answer was given</summary>' + ev[0];
+      node.appendChild(wrap);
+    }
+    const srcs = res.html.match(/<details class="ans-src">[\s\S]*?<\/details>/);
+    if (srcs) node.insertAdjacentHTML('beforeend', srcs[0]);
+    const guard = res.html.match(/<p class="ans-guard">[\s\S]*?<\/p>/);
+    if (guard) node.insertAdjacentHTML('beforeend', guard[0]);
+  }
 
   const bar = document.createElement('div');
   bar.className = 'ans-actions';
@@ -372,6 +495,25 @@ function initChat() {
 
   document.getElementById('chatToggle').addEventListener('click', () => panel.hidden ? open() : close());
   document.getElementById('chatClose').addEventListener('click', close);
+
+  const expand = document.getElementById('chatExpand');
+  if (expand) {
+    const KEY = 'surg-chat-wide';
+    const setWide = on => {
+      panel.classList.toggle('chat-wide', on);
+      expand.setAttribute('aria-label', on ? 'Shrink assistant' : 'Expand assistant');
+      try { localStorage.setItem(KEY, on ? '1' : '0'); } catch { /* private mode */ }
+    };
+    let wide = false;
+    try { wide = localStorage.getItem(KEY) === '1'; } catch { /* private mode */ }
+    setWide(wide);
+    expand.addEventListener('click', () => setWide(!panel.classList.contains('chat-wide')));
+  }
+
+  // Escape closes, matching the search overlay's behaviour.
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && !panel.hidden) close();
+  });
   window.addEventListener('hashchange', () => { if (!panel.hidden) renderSuggestions(); });
 
   if (modeHost) {

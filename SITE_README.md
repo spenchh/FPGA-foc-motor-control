@@ -109,10 +109,51 @@ page goes blank, check the browser console for `already been declared` first.
 
 ## How the assistant works
 
-There is no model and no network call. The assistant is retrieval plus templated
-composition, which means it cannot write new prose — and equally cannot invent a
-test result. Everything it shows is either a curated sentence or a quotation from
-a project file.
+The assistant runs in two modes and picks automatically.
+
+**With a model (Vercel):** retrieval runs in the browser, the top passages are posted
+to `/api/chat`, and a real model writes the answer over them. Because the model is only
+ever handed passages the retriever chose, it cannot cite a source it was not given —
+the citations stay deterministic even though the prose is generated.
+
+**Without a model (GitHub Pages, or the API down):** the same retrieval runs, and the
+answer is composed from curated sentences and direct quotations. No prose is generated,
+so it cannot invent a test result — but it is noticeably more rigid, and an unusual
+phrasing will land on the nearest canned answer.
+
+The client tries the model first and falls back silently, so both deployments work.
+
+### Turning the model on
+
+1. Deploy to Vercel (`vercel link`, then `vercel --prod`). The `api/` directory is
+   detected automatically; there is no build step.
+2. Create an **AI Gateway API key** in the Vercel dashboard.
+3. Add it as an environment variable: `vercel env add AI_GATEWAY_API_KEY`
+   (or set it under Project → Settings → Environment Variables).
+4. Redeploy. On Vercel you can skip the key entirely if OIDC is enabled.
+
+The model is set by `MODEL` at the top of `api/chat.js` (currently
+`anthropic/claude-sonnet-5`). Fetch the current list with
+`curl -s https://ai-gateway.vercel.sh/v1/models` before changing it — do not guess IDs.
+
+The GitHub Pages copy can also use the Vercel API: its origin is already in the CORS
+allow-list in `api/chat.js`. Set `ALLOWED_ORIGINS` to change that, and point
+`AI.endpoint` in `chatbot.js` at the full Vercel URL.
+
+**All the accuracy rules live in the `RULES` string in `api/chat.js`** — that nothing
+has been simulated or tested, that the PCB is not signed off, that Hall-assisted is the
+near-term path and sensorless is not, that 3PWM is not a new decision, that Halls give
+60-degree resolution rather than a precise angle. Edit them there.
+
+### Running locally with the model
+
+```bash
+AI_GATEWAY_API_KEY=... node tools/serve.mjs 8080
+```
+
+`tools/serve.mjs` runs `api/chat.js` at `/api/chat` using the same handler Vercel uses,
+so both paths are testable locally. Without a key it returns 503, which is exactly the
+signal the client uses to fall back — so the offline path is testable too.
 
 **Three layers:**
 
@@ -301,10 +342,15 @@ and a Vivado flow checklist that separates unblocked steps from blocked ones.
 
 ## Limitations — read before trusting this
 
-**The assistant does not generate text.** No model, no API key, no network call. It
-retrieves and quotes. Ask it something the project files do not cover and it will say
-so rather than reason its way to an answer. Making it genuinely generative needs a
-serverless function holding an API key, at which point the site is no longer static.
+**On GitHub Pages the assistant does not generate text.** Static hosting has no
+backend, so that copy retrieves and quotes only. It is honest but rigid: an unusual
+phrasing lands on the nearest canned answer. The Vercel deployment runs a real model
+over the same retrieved passages and does not have this limitation.
+
+**A model can still be wrong.** It is constrained by the passages it is handed and by
+the rules in `api/chat.js`, and it is told to say when something is unsettled — but it
+is not incapable of error. The citations under each answer are the reliable part: those
+come from the retriever, not the model. Check them for anything that matters.
 
 **Retrieval is lexical, not semantic.** BM25 plus phrase matching and a synonym table.
 A question phrased with vocabulary that appears nowhere in the project files may miss
