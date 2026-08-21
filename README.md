@@ -7,14 +7,6 @@
 
 PCB-aware FPGA and MATLAB work for the SURG motor controller
 
-Current local board files:
-
-- `C:\Users\HP\Documents\SURG\DriverBoard.SchDoc`
-- `C:\Users\HP\Documents\SURG\ActualDriverBoard.PcbDoc`
-- `C:\Users\HP\Documents\SURG\HV Motor Driver.BomDoc`
-- `C:\Users\HP\Documents\SURG\PCB_CROSSCHECK_2026-08-05.md`
-- `C:\Users\HP\Documents\SURG\FPGA_KNOWN_INFO_2026-08-05.md`
-
 ## Current Board Interface
 
 Confirmed from the updated cross-check:
