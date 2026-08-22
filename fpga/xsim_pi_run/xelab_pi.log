@@ -1,0 +1,14 @@
+Vivado Simulator v2026.1
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+Copyright 2022-2026 Advanced Micro Devices, Inc. All Rights Reserved.
+Running: C:/AMDDesignTools/2026.1/Vivado/bin/unwrapped/win64.o/xelab.exe --debug typical --relax --mt 2 -L work -snapshot tb_pi_controller_q15_behav work.tb_pi_controller_q15 -log C:\Users\HP\Documents\SURG\fpga\xsim_pi_run\xelab_pi.log 
+INFO: [XSIM 43-3493] Using 2 slave threads.
+Starting static elaboration
+Pass Through NonSizing Optimizer
+Completed static elaboration
+Starting simulation data flow analysis
+Completed simulation data flow analysis
+Time Resolution for simulation is 1ps
+Compiling module work.pi_controller_q15_default
+Compiling module work.tb_pi_controller_q15
+Built simulation snapshot tb_pi_controller_q15_behav

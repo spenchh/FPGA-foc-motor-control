@@ -1,0 +1,18 @@
+
+****** xsim v2026.1 (64-bit)
+  **** SW Build 6511674 on Tue Jun 16 11:02:23 MDT 2026
+  **** IP Build 6504888 on Tue Jun 09 09:05:25 MDT 2026
+  **** SharedData Build 6501428 on Mon Jun 08 17:34:18 MDT 2026
+  **** Start of session at: Sat Aug 22 02:07:01 2026
+    ** Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+    ** Copyright 2022-2026 Advanced Micro Devices, Inc. All Rights Reserved.
+
+source xsim.dir/tb_foc_current_loop_top_behav/xsim_script.tcl
+# xsim {tb_foc_current_loop_top_behav} -autoloadwcfg -runall
+Time resolution is 1 ps
+run -all
+Starting FOC current loop top testbench
+PASS: FOC current loop top testbench completed
+$finish called at time : 516 ns : File "C:/Users/HP/Documents/SURG/fpga/tb/tb_foc_current_loop_top.v" Line 165
+exit
+INFO: [Common 17-206] Exiting xsim at Sat Aug 22 02:07:03 2026...

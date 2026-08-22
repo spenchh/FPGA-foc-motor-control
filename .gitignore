@@ -28,3 +28,11 @@ SURG Gantt Chart.xlsx
 node_modules/
 .env
 .env.local
+
+# Vivado/xsim generated artifacts
+fpga/**/xsim.dir/
+fpga/**/*.wdb
+fpga/**/*.pb
+fpga/**/*.dcp
+fpga/**/*.jou
+fpga/**/*backup.log

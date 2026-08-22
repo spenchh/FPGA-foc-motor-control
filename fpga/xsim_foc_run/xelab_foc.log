@@ -1,0 +1,24 @@
+Vivado Simulator v2026.1
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+Copyright 2022-2026 Advanced Micro Devices, Inc. All Rights Reserved.
+Running: C:/AMDDesignTools/2026.1/Vivado/bin/unwrapped/win64.o/xelab.exe --debug typical --relax --mt 2 -L work -snapshot tb_foc_current_loop_top_behav work.tb_foc_current_loop_top 
+INFO: [XSIM 43-3493] Using 2 slave threads.
+Starting static elaboration
+Pass Through NonSizing Optimizer
+Completed static elaboration
+Starting simulation data flow analysis
+Completed simulation data flow analysis
+Time Resolution for simulation is 1ps
+Compiling module work.adc_current_scaler_q15_default
+Compiling module work.sincos_lut_q15
+Compiling module work.clarke_park_transform_default
+Compiling module work.pi_controller_q15_default
+Compiling module work.inverse_park_transform_default
+Compiling module work.alpha_beta_to_duty_default
+Compiling module work.phase_current_limit_monitor
+Compiling module work.phase_current_balance_monitor(BA...
+Compiling module work.pcb_disable_control
+Compiling module work.pwm_3phase_center_aligned
+Compiling module work.foc_current_loop_top_default
+Compiling module work.tb_foc_current_loop_top
+Built simulation snapshot tb_foc_current_loop_top_behav

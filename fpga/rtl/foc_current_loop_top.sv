@@ -83,7 +83,12 @@ module foc_current_loop_top #(
     logic signed [DATA_WIDTH-1:0] vq_q;
     logic signed [DATA_WIDTH-1:0] v_alpha_q;
     logic signed [DATA_WIDTH-1:0] v_beta_q;
+    logic [2:0] phase_over_limit_raw;
     logic [2:0] phase_over_limit;
+    logic current_out_of_range_raw;
+    logic balance_out_of_range_raw;
+    logic signed [BALANCE_WIDTH-1:0] balance_error_raw_q;
+    logic signed [BALANCE_WIDTH-1:0] balance_abs_raw_q;
     logic signed [BALANCE_WIDTH-1:0] balance_error_q;
     logic signed [BALANCE_WIDTH-1:0] balance_abs_q;
     logic input_balance_warning;
@@ -100,6 +105,11 @@ module foc_current_loop_top #(
             transform_sample_valid <= 1'b0;
             inverse_sample_valid <= 1'b0;
             duty_sample_valid <= 1'b0;
+            phase_over_limit <= 3'b000;
+            current_out_of_range <= 1'b0;
+            balance_error_q <= 0;
+            balance_abs_q <= 0;
+            balance_out_of_range <= 1'b0;
         end else begin
             if (current_valid)
                 sensor_ready <= 1'b1;
@@ -116,6 +126,12 @@ module foc_current_loop_top #(
             transform_sample_valid <= current_valid && angle_ready;
             inverse_sample_valid <= pi_d_valid && pi_q_valid;
             duty_sample_valid <= inverse_valid;
+
+            phase_over_limit <= phase_over_limit_raw;
+            current_out_of_range <= current_out_of_range_raw;
+            balance_error_q <= balance_error_raw_q;
+            balance_abs_q <= balance_abs_raw_q;
+            balance_out_of_range <= balance_out_of_range_raw;
         end
     end
 
@@ -254,8 +270,8 @@ module foc_current_loop_top #(
         .ib_q(ib_q),
         .ic_q(ic_q),
         .current_limit_q(current_limit_q),
-        .phase_over_limit(phase_over_limit),
-        .current_out_of_range(current_out_of_range)
+        .phase_over_limit(phase_over_limit_raw),
+        .current_out_of_range(current_out_of_range_raw)
     );
 
     phase_current_balance_monitor #(
@@ -267,9 +283,9 @@ module foc_current_loop_top #(
         .ib_q(ib_q),
         .ic_q(ic_q),
         .balance_limit_q(balance_limit_q),
-        .balance_error_q(balance_error_q),
-        .balance_abs_q(balance_abs_q),
-        .balance_out_of_range(balance_out_of_range)
+        .balance_error_q(balance_error_raw_q),
+        .balance_abs_q(balance_abs_raw_q),
+        .balance_out_of_range(balance_out_of_range_raw)
     );
 
     pcb_disable_control disable_control (
@@ -311,7 +327,6 @@ module foc_current_loop_top #(
     );
 
 endmodule
-
 
 
 
