@@ -12,7 +12,7 @@ def main():
     runtime = shutil.which("vvp")
     if not compiler or not runtime:
         raise SystemExit("Install Icarus Verilog and add iverilog and vvp to PATH.")
-    sources = sorted(rtl.glob("*.sv"))
+    sources = sorted((rtl / "design").glob("*.sv"))
     tests = sorted((rtl / "verif").glob("tb_*.sv"))
     if not sources or not tests:
         raise SystemExit("Missing RTL sources or testbenches.")
